@@ -1,0 +1,24 @@
+{
+  "name": "ng-racs-core",
+  "version": "0.5.0",
+  "description": "Angular services, models and imaging/3D algorithms for RACS (rust-cam-serve), the REST and WebSocket server for GigE Vision cameras",
+  "keywords": ["angular", "racs", "rust-cam-serve", "gige-vision", "genicam", "machine-vision", "camera", "point-cloud"],
+  "license": "GPL-2.0-only",
+  "homepage": "https://git.javerik.dev/opensource/rustcamserve/-/tree/master/racs-webapp/projects/ng-racs-core",
+  "bugs": "https://git.javerik.dev/opensource/rustcamserve/-/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.javerik.dev/opensource/rustcamserve.git",
+    "directory": "racs-webapp/projects/ng-racs-core"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "rxjs": "~7.8.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "zstddec": "^0.3.1"
+  },
+  "sideEffects": false
+}

@@ -1,0 +1,42 @@
+{
+  "name": "racs-webapp",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "start:proxy": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "build:libs": "ng build ng-racs-core && ng build ng-racs-ui && node scripts/finish-libs.mjs",
+    "pack:libs": "node scripts/check-lib-version.mjs && mkdir -p dist/packages && npm pack ./dist/ng-racs-core ./dist/ng-racs-ui --pack-destination dist/packages"
+  },
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "dependencies": {
+    "@angular/animations": "^21.2.5",
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zstddec": "^0.3.1"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.3",
+    "@angular/cli": "^21.2.3",
+    "@angular/compiler-cli": "^21.2.0",
+    "autoprefixer": "^10.4.0",
+    "jsdom": "^28.0.0",
+    "ng-packagr": "^21.2.0",
+    "postcss": "^8.4.0",
+    "prettier": "^3.8.1",
+    "sass": "^1.97.3",
+    "tailwindcss": "^3.4.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}

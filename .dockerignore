@@ -1,0 +1,11 @@
+# Local build output of the laserthing submodule; the laserline stages build it themselves.
+laserthing/node_modules
+laserthing/target
+laserthing/.angular
+laserthing/apps/*/dist
+laserthing/packages/*/dist
+laserthing/packages/laserline/wasm
+
+# The consumer example installs the packed Angular libraries itself (CI: test:web-libs-consumer).
+racs-webapp/examples/consumer/node_modules
+racs-webapp/examples/consumer/dist

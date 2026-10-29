@@ -1,0 +1,9 @@
+/*
+ * The RACS design system for Tailwind 3 users: Tailwind's layers, the theme tokens, the page base
+ * and the shared component classes. Needs ng-racs-ui/tailwind-preset.cjs in the Tailwind config,
+ * with the library's files in its `content`. Without Tailwind, use the prebuilt racs-ui.css.
+ */
+@use 'tailwind';
+@use 'tokens';
+@use 'base';
+@use 'components';

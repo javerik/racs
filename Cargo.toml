@@ -1,0 +1,53 @@
+[package]
+name = "rust-cam-serve"
+version = "0.5.0"
+edition = "2021"
+repository = "https://git.javerik.dev/opensource/rustcamserve.git"
+
+[dependencies]
+aravis-port = { path = "aravis-port/aravis-port" }
+if-addrs = "0.13"
+env_logger = "0.11" # Check crates.io for the latest version
+# `log` feature so RACS's own tracing macros reach env_logger, which is what actually
+# initialises logging in main. aravis-port logs via `log` directly.
+tracing = { version = "0.1.44", features = ["log"] }
+
+# Web framework
+actix-web = "4.11.0"
+actix-files = "0.6"
+clap = { version = "4", features = ["derive", "env"] }
+# WebSocket support for actix-web 4, without the actor runtime.
+actix-ws = "0.4"
+tokio = { version = "1", features = ["full", "io-util", "macros", "rt", "rt-multi-thread"] }
+
+# OpenAPI
+utoipa = { version = "5.4.0", features = ["actix_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+# The live-stream endpoint serialises its opening metadata message by hand, outside actix's `json()`.
+serde_json = "1"
+# RFC 3339 timestamps on stream errors, and the serialised timestamps on burst-job records.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+# Burst-job ids. Opaque to the client, so a v4 uuid rather than another integer id space.
+uuid = { version = "1", features = ["v4", "serde"] }
+
+futures = "0.3.31"
+strum = { version = "0.28.0", features = ["derive"] }
+# JPEG frames. `simd` uses AVX2 when the CPU has it (checked at run time); ARM builds stay scalar.
+jpeg-encoder = { version = "0.7.1", features = ["simd"] }
+# The lossless `zstd` frame format. actix-http's compression builds it in already, so no new native code.
+zstd = "0.13"
+# Burst images shared between the job store and the responses instead of copied.
+bytes = "1"
+
+[dev-dependencies]
+tracing-test = "0.2.5"
+# Paused time, for the camera store's queueing tests.
+tokio = { version = "1", features = ["test-util"] }
+aravis-port-fakecamera = { path = "aravis-port/aravis-port-fakecamera" }
+# `test::init_service` cannot perform a WebSocket upgrade, so the live-stream tests need a real
+# bound server (actix-test) and a WebSocket client (awc).
+actix-test = "0.1"
+awc = "3"

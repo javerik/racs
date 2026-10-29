@@ -1,0 +1,98 @@
+:host {
+  display: flex;
+  container-type: inline-size;
+}
+
+/* The readout takes the command bar's last line, unless the panel is wide enough for one line. */
+.command-bar .readout {
+  order: 99;
+  flex-basis: 100%;
+}
+
+.command-bar .readout-rule {
+  display: none;
+}
+
+@container (min-width: 60rem) {
+  .command-bar .readout {
+    order: 0;
+    flex: 1 1 auto;
+  }
+
+  .command-bar .readout-rule {
+    display: inline-block;
+  }
+}
+
+/*
+ * Desktop: the cloud over its range, the inspector beside both. The inspector scrolls inside the
+ * height the two give it, so its open sections never stretch the cloud.
+ */
+.cloud-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  grid-template-areas:
+    'stage inspector'
+    'range inspector';
+  grid-template-rows: auto auto;
+}
+
+.cloud-stage {
+  grid-area: stage;
+  min-width: 0;
+}
+
+.cloud-range {
+  grid-area: range;
+  min-width: 0;
+}
+
+.cloud-inspector {
+  grid-area: inspector;
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid rgb(var(--line));
+}
+
+.cloud-inspector-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+
+/* Full screen: the cloud takes the height the range leaves. */
+.cloud-body:fullscreen {
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: rgb(var(--bg));
+
+  .cloud-stage {
+    min-height: 0;
+  }
+}
+
+/* Mobile: one column, the inspector's tabs under the range, in the page's flow. */
+:host-context([data-layout='mobile']) {
+  .cloud-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'stage'
+      'range'
+      'inspector';
+  }
+
+  /* Full screen: the cloud keeps most of the screen, the range and the inspector scroll under it. */
+  .cloud-body:fullscreen {
+    grid-template-rows: minmax(60vh, 1fr) auto auto;
+    overflow-y: auto;
+  }
+
+  .cloud-inspector {
+    border-left: 0;
+    border-top: 1px solid rgb(var(--line));
+  }
+
+  .cloud-inspector-scroll {
+    position: static;
+    overflow: visible;
+  }
+}

@@ -1,0 +1,21 @@
+.feature-cat {
+  border-bottom: 1px solid rgb(var(--line));
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+/* Maximized: categories as cards in as many columns as fit. */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.feature-cat.feature-card {
+  border: 1px solid rgb(var(--line));
+  background: rgb(var(--surface));
+}

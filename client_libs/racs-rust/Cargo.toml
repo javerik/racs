@@ -1,0 +1,32 @@
+[package]
+name = "racs-client"
+version = "0.5.0"
+edition = "2021"
+description = "Async client for the RACS (RustAravisCamServe) camera server: GenICam features, frames, live stream and burst jobs"
+license = "GPL-2.0-only"
+authors = ["Jonas Ahlf <javerik@javerik.space>"]
+readme = "README.md"
+repository = "https://codeberg.org/javerik/RACS-RustAravisCamServe"
+keywords = ["racs", "camera", "genicam", "gigevision", "client"]
+categories = ["api-bindings", "multimedia::images"]
+
+[features]
+# https:// and wss:// servers, e.g. RACS behind a reverse proxy. RACS itself only speaks plain HTTP.
+tls = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-native-roots"]
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
+tokio-tungstenite = "0.30"
+tokio = { version = "1", features = ["time"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
+uuid = { version = "1", features = ["serde"] }
+url = "2"
+thiserror = "2"
+# Decoding `zstd` frames.
+zstd = "0.13"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }

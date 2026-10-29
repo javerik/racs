@@ -1,0 +1,202 @@
+<section class="panel flex w-full flex-col">
+  <!--
+    One row: the stream settings, then the actions (the tab already names the view). On mobile the
+    settings are a three-column row, each label above its select, under the actions.
+  -->
+  <div class="panel-head">
+    <div class="flex flex-1 flex-wrap items-center gap-x-5 gap-y-2 mobile:order-last mobile:grid mobile:w-full mobile:flex-none mobile:grid-cols-3 mobile:gap-x-2 mobile:pb-1.5">
+      <label class="flex items-center gap-2 mobile:flex-col mobile:items-stretch mobile:gap-1">
+        <span class="label">Transport</span>
+        <select class="field w-auto" [value]="settings().format"
+          (change)="updateSettings({ format: $any($event.target).value })">
+          <option value="zstd" title="Every pixel exactly, about half the bytes of raw">
+            {{ layout.isMobile() ? 'Lossless' : 'Lossless · zstd' }}</option>
+          <option value="raw" title="Every pixel exactly, uncompressed">
+            {{ layout.isMobile() ? 'Raw' : 'Raw · uncompressed' }}</option>
+          <option value="jpeg" title="8 bit, lossy, the smallest">{{ layout.isMobile() ? 'JPEG' : 'JPEG · light' }}</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 mobile:flex-col mobile:items-stretch mobile:gap-1"
+        [class.opacity-40]="settings().format === 'jpeg'">
+        <span class="label">Depth</span>
+        <select class="field w-auto" [value]="settings().depth" [disabled]="settings().format === 'jpeg'"
+          [attr.title]="settings().format === 'jpeg' ? 'JPEG always carries 8 bits' : null"
+          (change)="updateSettings({ depth: $any($event.target).value })">
+          <option value="mono8">8 bit</option>
+          <option value="mono16">16 bit</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 mobile:flex-col mobile:items-stretch mobile:gap-1">
+        <span class="label">FPS</span>
+        <!-- [selected] on the options: a select's [value] is set before @for has added them. -->
+        <select class="field w-auto" (change)="updateSettings({ fps: +$any($event.target).value })">
+          @for (f of fpsChoices; track f) {
+          <option [value]="f" [selected]="f === settings().fps">{{ f }}</option>
+          }
+        </select>
+      </label>
+    </div>
+    <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mobile:w-full">
+      @if (startBlocked() ?? captureBlocked(); as why) {
+      <span class="font-mono text-2xs text-faint mobile:w-full mobile:text-right">{{ why }}</span>
+      }
+      <button type="button" class="btn mobile:flex-1" [disabled]="loading() || live() || !!captureBlocked()"
+        (click)="captureSnapshot()" [title]="captureBlocked() ?? 'Grab a single JPEG frame'">
+        {{ loading() ? 'Grabbing…' : 'Capture' }}
+      </button>
+      <button type="button" class="btn btn-primary min-w-[6.5rem] mobile:flex-1" [disabled]="loading() || !!startBlocked()"
+        [title]="startBlocked() ?? (live() ? 'Stop watching' : streamRunning() ? 'Watch the stream another client runs' : 'Start the live stream')"
+        (click)="toggleLive()">
+        {{ live() ? 'Stop' : streamRunning() ? 'Join live' : 'Start live' }}
+      </button>
+    </div>
+  </div>
+
+  <!--
+    Pinned under the tabs on mobile, so the image stays in view while the settings below scroll.
+    The handle under it folds it into a slim bar (tap, or swipe up) and opens it again (tap, or
+    swipe down); folded, the bar stays pinned.
+  -->
+  <div class="desktop:flex desktop:min-w-0 mobile:contents">
+  <div class="pin-frame flex min-w-0 flex-col desktop:flex-1">
+    <racs-frame-canvas interactive viewKey="racs.live.view" [frame]="frame()" [range]="range()"
+      [maxHeightVh]="layout.isMobile() ? 0.42 : 0.7" [style.display]="folded() ? 'none' : null"
+      [space]="regionSpace()" [captureTouch]="roi.tool() !== null">
+      <racs-view-tools viewTools region [regionDisabled]="!regionAvailable()" />
+
+      @if (regionOpen() && !wizardOpen()) {
+      <!-- The camera region being edited: exact values, presets, and Apply. -->
+      <div viewBar class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-4 py-1.5 mobile:px-2">
+        <span class="label text-fg">Region</span>
+        @if (regionDraft(); as d) {
+        @for (f of regionFields; track f.key) {
+        <label class="inline-flex items-center gap-1.5">
+          <span class="font-mono text-2xs text-faint">{{ f.label }}</span>
+          <input type="number" class="field h-6 w-[4.75rem] px-1.5 mobile:w-[5.5rem]" [value]="d[f.key]"
+            [disabled]="f.offset && !(f.key === 'x' ? regionLimits()?.x?.hasOffset : regionLimits()?.y?.hasOffset)"
+            [attr.aria-label]="f.title" [title]="f.title" (change)="setRegionField(f.key, $any($event.target).valueAsNumber)" />
+        </label>
+        }
+        @if (regionLimits(); as l) {
+        <span class="font-mono text-2xs text-faint">sensor {{ l.x.extent }}×{{ l.y.extent }}</span>
+        }
+        } @else {
+        <span class="font-mono text-2xs text-faint">reading region…</span>
+        }
+        <span class="ml-auto inline-flex items-center gap-2 mobile:ml-0 mobile:w-full">
+          @if (regionApplying()) {
+          <span class="inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-muted">
+            <span class="dot animate-pulse bg-warn"></span>Applying
+          </span>
+          } @else if (regionBlocked(); as why) {
+          <span class="font-mono text-2xs text-warn">{{ why }}</span>
+          }
+          <button type="button" class="btn" title="The whole sensor" [disabled]="!regionDraft()" (click)="fullRegion()">Full</button>
+          <button type="button" class="btn" title="Centre the region on the sensor" [disabled]="!regionDraft()"
+            (click)="centerRegion()">Center</button>
+          <button type="button" class="btn" title="Leave without changing the camera (Esc)" (click)="cancelRegion()">Cancel</button>
+          <button type="button" class="btn btn-primary" title="Write the region to the camera (Enter)"
+            [disabled]="!regionChanged() || !!regionBlocked() || regionApplying() || calibrating()" (click)="applyRegion()">Apply</button>
+        </span>
+        @if (regionError(); as err) {
+        <div class="notice-err basis-full">{{ err }}</div>
+        }
+        <racs-laser-calibration />
+      </div>
+      }
+
+      @if (regionOpen()) {
+      <!-- The laserline line's envelope on the sensor, under the region's handles. -->
+      <svg:g racsEnvelopeOverlay overlay />
+      }
+      @if (regionOpen() && regionLimits(); as limits) {
+      <svg:g racsRegionOverlay overlay [limits]="limits" [current]="regionCurrent()" [(draft)]="regionDraft"
+        (apply)="applyRegion()" (cancel)="cancelRegion()" />
+      } @else {
+      <svg:g racsRoiOverlay overlay />
+      }
+    </racs-frame-canvas>
+    @if (layout.isMobile()) {
+    <button type="button" class="pin-handle" [class.folded]="folded()" [attr.aria-expanded]="!folded()"
+      [attr.aria-label]="folded() ? 'Show image' : 'Hide image'" [title]="folded() ? 'Show image' : 'Hide image'"
+      (pointerdown)="onHandleDown($event)" (pointerup)="onHandleUp($event)" (pointercancel)="onHandleCancel()"
+      (click)="onHandleClick()">
+      <span class="grip" aria-hidden="true"></span>
+      @if (folded()) {
+      <racs-icon name="chevron-down" />
+      <span class="label text-fg">Show image</span>
+      <span class="ml-auto inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em]"
+        [class.text-fg]="live()" [class.text-muted]="!live()">
+        <span class="dot" [class.animate-pulse]="live()" [class.bg-ok]="live()" [class.bg-faint]="!live()"></span>
+        @if (live()) {
+        Live · <span class="normal-case">{{ frameCount() }} fr</span>
+        } @else {
+        Idle
+        }
+      </span>
+      } @else {
+      <span class="ml-auto inline-flex items-center gap-1.5 font-mono text-2xs text-faint">
+        hide image
+        <racs-icon name="chevron-up" />
+      </span>
+      }
+    </button>
+    }
+  </div>
+  @if (wizardOpen() && !layout.isMobile()) {
+  <!-- The calibration wizard beside the image; on mobile it sits under the pinned image. -->
+  <racs-laser-wizard class="w-[22rem] shrink-0 border-l border-line" (startLive)="startLiveFromWizard()"
+    (closed)="onWizardClosed($event.toEditor)" />
+  }
+  </div>
+  @if (wizardOpen() && layout.isMobile()) {
+  <racs-laser-wizard class="border-b border-line" (startLive)="startLiveFromWizard()" (closed)="onWizardClosed($event.toEditor)" />
+  }
+
+  <racs-range-control [settings]="rangeSettings()" (settingsChange)="onRangeChange($event)"
+    [bitDepth]="bitDepth()" [resolved]="range()" [stats]="stats()" />
+
+  <racs-roi-analysis [frame]="frame()" />
+
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line px-4 py-2 font-mono text-2xs text-muted">
+    @if (live()) {
+    <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em] text-fg">
+      <span class="dot animate-pulse bg-ok"></span>Live
+    </span>
+    @if (info(); as i) {
+    <span>{{ i.width }}×{{ i.height }} · {{ i.pixel_format }} · {{ i.format }}</span>
+    @if (i.packet_size) {
+    <span title="GVSP packet size (GevSCPSPacketSize) the stream runs with">pkt <span class="text-fg">{{ i.packet_size }}</span> B</span>
+    }
+    }
+    <span title="Frames per second this browser receives, over the last 2 s, and the limit asked for">
+      fps <span class="text-fg">{{ rates() ? rates()!.fps.toFixed(1) : '—' }}</span>
+      <span class="text-faint">≤ {{ settings().fps }}</span>
+    </span>
+    <span title="Data this browser receives from the stream (JPEG or raw frames), over the last 2 s">
+      <span class="text-fg">{{ rates() ? formatDataRate(rates()!.bytesPerSecond) : '— MB/s' }}</span>
+    </span>
+    <span>frames <span class="text-fg">{{ frameCount() }}</span></span>
+    <span>dropped <span [class.text-warn]="droppedCount() > 0">{{ droppedCount() }}</span></span>
+    <span class="ml-auto text-faint" [title]="'Open live sockets of this capture, in every client'">
+      {{ viewers() }} {{ viewers() === 1 ? 'viewer' : 'viewers' }}<span class="mobile:hidden"> · {{ captureBlocked() ? 'watching · settings are read-only' : 'camera held · settings apply live' }}</span>
+    </span>
+    } @else {
+    <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em]">
+      <span class="dot bg-faint"></span>Idle
+    </span>
+    @if (frame(); as f) {
+    <span>{{ f.width }}×{{ f.height }} · {{ f.bitDepth }} bit</span>
+    } @else {
+    <span class="text-faint">single frame or stream</span>
+    }
+    }
+  </div>
+
+  @if (error(); as err) {
+  <div class="notice-err m-3 mt-0">{{ err }}</div>
+  }
+
+  <!-- The mobile workspace puts the quick settings here, under the pinned image. -->
+  <ng-content />
+</section>

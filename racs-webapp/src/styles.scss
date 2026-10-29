@@ -1,0 +1,7 @@
+// The RACS design system (theme tokens, component classes) from ng-racs-ui, with Tailwind.
+@use 'ng-racs-ui/styles/racs-ui';
+
+app-root {
+  display: block;
+  height: 100%;
+}

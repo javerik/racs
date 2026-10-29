@@ -1,0 +1,96 @@
+name: Client libs (test and build check)
+
+# Mirror of .forgejo/workflows/pub-client-libs.yml — keep both files in step.
+# Publishing to PyPI / NuGet is owned by the Forgejo pipeline; this workflow tests both
+# client libraries on every push and verifies that they still package cleanly on a tag.
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+      - 'feat_**'
+      - 'bugfix_**'
+    tags:
+      - '*'
+  pull_request:
+
+jobs:
+  # Builds `examples/fake_server.rs` and runs every client test suite against it
+  # (client_libs/run-tests.sh). Runs on every push, so a server change that breaks a
+  # client shows up before the next release.
+  test:
+    name: Test client libs against the fake server
+    runs-on: ubuntu-latest
+    container:
+      image: sharerox/racs@sha256:cfc887b2edd39d0a0fe3ffe37a404cb4906fc9ce1f9b2a0b0870cf21476fddaf
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache Rust Dependencies
+        uses: Swatinem/rust-cache@v2
+      # The Rust builder image (Debian bookworm) has cargo for the Rust client, but no venv module
+      # and no .NET SDK.
+      - name: Install Python and .NET
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-venv libicu72 libssl3
+          curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0 --install-dir "$HOME/.dotnet"
+          echo "$HOME/.dotnet" >> "$GITHUB_PATH"
+      - name: Test
+        run: client_libs/run-tests.sh all
+
+  build-and-publish-racs-python:
+    name: Build racs-python package
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    container: sharerox/racs@sha256:80e1fc8d638f414c9ed4b118b3b2ae1a7be152542395a2bdd5c969ab37639bfd
+    defaults:
+      run:
+        working-directory: ./client_libs/racs-python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build the package
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: racs-python-dist
+          path: client_libs/racs-python/dist/
+          retention-days: 7
+
+  build-and-publish-racs-dotnet:
+    name: Build Racs.Dotnet package
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    container: sharerox/racs@sha256:2dce51901354795c34d91b9562748ff1586aeb2502de7353489f70d224a471a4
+    defaults:
+      run:
+        working-directory: ./client_libs/racs-dotnet
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build project
+        run: dotnet build -c Release
+
+      - name: Pack NuGet package
+        run: dotnet pack -c Release --no-build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: racs-dotnet-nupkg
+          path: client_libs/racs-dotnet/bin/Release/*.nupkg
+          retention-days: 7

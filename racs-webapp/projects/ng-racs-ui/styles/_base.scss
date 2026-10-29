@@ -1,0 +1,19 @@
+/* Page base. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-bg text-fg font-sans text-sm antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--line-strong)) transparent;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.4);
+}

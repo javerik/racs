@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Rust Camera Server
+Exec=rust-cam-serve
+Icon=rust-cam-serve
+Type=Application
+Categories=Utility;

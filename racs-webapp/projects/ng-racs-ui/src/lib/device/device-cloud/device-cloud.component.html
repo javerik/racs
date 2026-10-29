@@ -1,0 +1,209 @@
+<section class="panel flex w-full flex-col">
+  <!--
+    The command bar: the mode, the capture settings as one summary (a popover holds them), what
+    the capture is doing, and the action.
+  -->
+  <div class="panel-head command-bar">
+    <div class="inline-flex mobile:flex-1" role="radiogroup" aria-label="Capture mode">
+      @for (m of modes; track m.id; let first = $first) {
+      @let on = settings().mode === m.id;
+      <button type="button" role="radio" class="btn rounded-none mobile:flex-1" [style.margin-left.px]="first ? 0 : -1"
+        [attr.aria-checked]="on" [class.!border-accent]="on" [class.!text-fg]="on" [class.text-muted]="!on"
+        [disabled]="!!running()" [title]="m.hint" (click)="setMode(m.id)">{{ m.label }}</button>
+      }
+    </div>
+
+    <div #captureMenu class="relative mobile:order-[98] mobile:w-full">
+      <button type="button" class="btn normal-case tracking-normal mobile:w-full mobile:justify-between" aria-haspopup="dialog"
+        [attr.aria-expanded]="captureOpen()" [class.!border-accent]="captureOpen()" title="Depth and buffer of the capture"
+        (click)="toggleCapture()">
+        <span class="font-mono text-xs">{{ captureSummary() }}</span>
+        <racs-icon name="chevron-down" />
+      </button>
+      @if (captureOpen()) {
+      <div role="dialog" aria-label="Capture settings"
+        class="absolute left-0 top-full z-20 mt-1 flex w-72 flex-col border border-line-strong bg-surface mobile:w-full">
+        <div class="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 p-3">
+          <span class="label">Depth</span>
+          <div class="inline-flex" role="radiogroup" aria-label="Depth">
+            @for (d of depths; track d.id; let first = $first) {
+            @let on = settings().depth === d.id;
+            <button type="button" role="radio" class="btn flex-1 rounded-none" [style.margin-left.px]="first ? 0 : -1"
+              [attr.aria-checked]="on" [class.!border-accent]="on" [class.!text-fg]="on" [class.text-muted]="!on"
+              [disabled]="running() === 'snapshot'" (click)="updateSettings({ depth: d.id })">{{ d.label }}</button>
+            }
+          </div>
+          @if (settings().mode === 'continuous') {
+          <span class="label" title="Profiles the rolling buffer keeps; the oldest make way for new ones">Buffer</span>
+          <select class="field" aria-label="Buffer" (change)="updateSettings({ capacity: +$any($event.target).value })">
+            @for (c of capacityChoices; track c) {
+            <!-- [selected], not the select's [value]: that is set before these options exist. -->
+            <option [value]="c + ''" [selected]="settings().capacity === c">{{ c.toLocaleString() }} profiles</option>
+            }
+          </select>
+          } @else {
+          <span class="label" [title]="'Frames in one snapshot, 1 to ' + maxFrames">Frames</span>
+          <input type="number" class="field" min="1" [max]="maxFrames" step="1" [value]="settings().frames"
+            aria-label="Frames" [disabled]="!!running()" (change)="updateSettings({ frames: $any($event.target).valueAsNumber })" />
+          }
+        </div>
+        <p class="m-0 border-t border-line px-3 py-2 font-mono text-2xs text-faint">
+          {{ settings().mode === 'continuous' ? 'every frame · no fps limit · dropped frames leave gaps · a change restarts the stream' : 'a raw burst · frames stacked in capture order' }}
+          @if (bufferShort(); as n) {
+          <span class="block text-warn">the graphics card holds {{ n.toLocaleString() }} profiles of this width</span>
+          }
+        </p>
+      </div>
+      }
+    </div>
+
+    <span class="readout-rule h-4 w-px bg-line" aria-hidden="true"></span>
+
+    <!-- What the capture is doing: beside the controls in a wide panel, else on a line of its own. -->
+    <div class="readout flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted">
+      @switch (running()) {
+      @case ('continuous') {
+      <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em] text-fg"><span class="dot animate-pulse bg-ok"></span>Live</span>
+      }
+      @case ('snapshot') {
+      <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em] text-fg"><span class="dot animate-pulse bg-ok"></span>Capturing</span>
+      }
+      @default {
+      <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em]"><span class="dot bg-faint"></span>Idle</span>
+      }
+      }
+      @if (geometry(); as g) {
+      <span>{{ g.width }}×{{ g.height }} · {{ g.pixelFormat || 'raw' }} · {{ g.bitDepth }} bit</span>
+      } @else if (!running()) {
+      <span class="text-faint">a profile per image row · x column · z value</span>
+      }
+      @if (running() === 'continuous') {
+      <span title="Profiles per second this browser receives, over the last 2 s">
+        <span class="text-fg">{{ rates() && geometry() ? (rates()!.fps * geometry()!.height).toFixed(0) : '—' }}</span> profiles/s
+      </span>
+      <span title="Data this browser receives from the stream, over the last 2 s">
+        <span class="text-fg">{{ rates() ? formatDataRate(rates()!.bytesPerSecond) : '— MB/s' }}</span>
+      </span>
+      <span title="Frames lost on the way; each leaves a gap of its profiles">
+        dropped <span [class.text-warn]="dropped() > 0" [class.text-fg]="dropped() === 0">{{ dropped() }}</span>
+      </span>
+      }
+      @if (snapshot(); as p) {
+      <span>frames <span class="text-fg">{{ p.loaded }}</span> / {{ p.requested }}</span>
+      @if (p.failed > 0) {
+      <span>failed <span class="text-warn">{{ p.failed }}</span></span>
+      }
+      @if (storeStride() > 1) {
+      <span class="text-warn" title="The snapshot is larger than this device keeps; profiles are thinned evenly">
+        every {{ storeStride() }}th profile kept
+      </span>
+      }
+      }
+      @if (ring(); as r) {
+      <span title="Profiles held">
+        profiles <span class="text-fg">{{ held().toLocaleString() }}</span>@if (r.mode === 'rolling') {<span class="text-faint"> / {{ r.rows.toLocaleString() }}</span>}
+      </span>
+      }
+    </div>
+
+    <div class="ml-auto flex items-center gap-x-3">
+      @if (startBlocked(); as why) {
+      <span class="font-mono text-2xs text-faint">{{ why }}</span>
+      }
+      <button type="button" class="btn btn-primary min-w-[6.5rem]" [disabled]="!running() && (scanSaving() || !!startBlocked())"
+        [title]="startBlocked() ?? ''" (click)="toggle()">
+        @switch (running()) {
+        @case ('continuous') { Stop }
+        @case ('snapshot') { Cancel }
+        @default { {{ settings().mode === 'continuous' ? 'Start' : 'Capture' }} }
+        }
+      </button>
+    </div>
+  </div>
+
+  @if (scanNode() && (!is3d() || scanSaving() || scanError())) {
+  <!--
+    Profiles come from Linescan3D; any other mode still draws, a row per profile. In Linescan3D the
+    row has nothing to add to Essentials, so it shows only while switching or failing.
+  -->
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2">
+    <span class="label">Scan type</span>
+    <span class="font-mono text-xs" [class.text-fg]="is3d()" [class.text-muted]="!is3d()">
+      {{ scanEntry()?.display_name ?? '—' }}
+    </span>
+    @if (scanSaving()) {
+    <span class="inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-muted">
+      <span class="dot animate-pulse bg-warn"></span>Applying
+    </span>
+    } @else if (scanEntry() && !is3d()) {
+    <span class="font-mono text-2xs text-faint">not 3D · each image row is drawn as a profile</span>
+    }
+    @if (scanEntry() && !is3d()) {
+    <button type="button" class="btn ml-auto mobile:ml-0 mobile:w-full" [disabled]="!!scanBlocked() || scanSaving()"
+      [title]="scanBlocked() ?? 'Write DeviceScanType = Linescan3D'" (click)="switchToLinescan3d()">
+      Switch to Linescan3D
+    </button>
+    }
+    @if (scanError(); as err) {
+    <div class="notice-err basis-full">{{ err }}</div>
+    }
+  </div>
+  }
+
+  <!--
+    The cloud with its range beside the inspector; full screen takes all three. On mobile they
+    stack: cloud, range, then the inspector's sections as tabs.
+  -->
+  <div #body class="cloud-body">
+    <racs-cloud-view #cloud class="cloud-stage" [ring]="ring()" [storeStride]="storeStride()" [range]="range()"
+      [zExtent]="zExtent()" [scaling]="scaling()" [budget]="budget()" [placeholder]="placeholder()"
+      [detail]="drawDetail()" [fullscreenTarget]="body" [maxHeightVh]="layout.isMobile() ? 0.42 : 0.7"
+      (drawInfo)="onDrawInfo($event)" (memoryShort)="onMemoryShort($event)" />
+
+    <racs-range-control class="cloud-range" [settings]="rangeSettings()"
+      (settingsChange)="onRangeChange($event)" [bitDepth]="bitDepth()" [resolved]="range()" [stats]="zStats()" />
+
+    <aside class="cloud-inspector" aria-label="3D settings">
+      <racs-inspector class="cloud-inspector-scroll" storageKey="racs.cloud.inspector">
+        @if (hasScan3d()) {
+        <racs-inspector-section id="scan3d" title="Scan 3D" camera [order]="0" [summary]="scan3dSummary()">
+          <racs-camera-features category="Scan3dControl" />
+        </racs-inspector-section>
+        }
+        @if (hasRegion()) {
+        <racs-inspector-section id="region" title="Region" camera [order]="1" [summary]="regionSummary()">
+          <racs-camera-features selector="RegionSelector" />
+        </racs-inspector-section>
+        }
+
+        <racs-cloud-view-settings [view]="cloud" [order]="10" />
+
+        <racs-inspector-section id="scaling" title="Scaling" [order]="20" [summary]="scalingSummary()">
+          <racs-metric-scaling [scaling]="scaling()" [liveRate]="liveRate()" [burst]="lastBurst()" (scalingChange)="applyScaling($event)"
+            [profilesPerFrame]="profilesPerFrame()" [stlBlocked]="stlBlocked()" [stlChecking]="stlChecking()" [stlCloud]="stlCloud()"
+            (stlCapture)="checkAgainstStl($event)" />
+        </racs-inspector-section>
+
+        <racs-inspector-section id="export" title="Export" [order]="21">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <button type="button" class="btn" [disabled]="!exportSize()?.points"
+              title="The cloud as a binary PLY: every valid point, in the scaling's units" (click)="exportPly()">PLY</button>
+            <span class="font-mono text-2xs text-faint">
+              @if (exportSize(); as e) {
+              {{ e.points.toLocaleString() }} points · {{ (e.bytes / 1e6).toFixed(1) }} MB · {{ scaling().unit }}
+              } @else if (running()) {
+              after the capture stops
+              } @else {
+              nothing captured yet
+              }
+            </span>
+          </div>
+        </racs-inspector-section>
+      </racs-inspector>
+    </aside>
+  </div>
+
+  @if (error(); as err) {
+  <div class="notice-err m-3">{{ err }}</div>
+  }
+</section>

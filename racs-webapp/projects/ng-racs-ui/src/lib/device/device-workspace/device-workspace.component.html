@@ -1,0 +1,161 @@
+<div class="flex w-full min-w-0 flex-col gap-6">
+  @let dev = device();
+  <header class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-4">
+    <div class="min-w-0">
+      <p class="label m-0 mb-1">
+        Device{{ deviceId() !== null ? ' #' + deviceId() : '' }}
+        @if (dev) {
+        <span class="normal-case tracking-normal text-faint">· {{ dev.ip }}{{ dev.mac ? ' · ' + dev.mac : '' }}</span>
+        }
+      </p>
+      <h1 class="m-0 truncate text-lg font-medium">{{ dev?.model || 'Acquisition & features' }}</h1>
+    </div>
+
+    @if (dev && deviceId() !== null) {
+    <racs-device-access class="min-w-0 desktop:ml-auto" [deviceId]="deviceId()!" />
+    }
+
+    <!-- The sidebar device list is desktop only; on mobile switching happens here. -->
+    @if (layout.isMobile() && registry.connected().length > 1) {
+    <label class="flex w-full items-center gap-2">
+      <span class="label shrink-0">Device</span>
+      <select class="field" (change)="openDevice($any($event.target).value)">
+        @for (d of registry.connected(); track d.id) {
+        <option [value]="d.id" [selected]="d.id === deviceId()">#{{ d.id }} · {{ d.model || 'Camera' }}</option>
+        }
+      </select>
+    </label>
+    }
+  </header>
+
+  @switch (state()) {
+  @case ('none') {
+  <div class="panel mx-auto flex w-full max-w-md flex-col items-start gap-4 px-5 py-6">
+    <p class="label m-0">No device connected</p>
+    <p class="m-0 text-sm leading-relaxed text-muted">
+      Connect a camera in Discovery. Connected devices are listed under Device in the sidebar.
+    </p>
+    <a routerLink="/device-discovery" class="btn btn-primary no-underline">Open discovery</a>
+  </div>
+  }
+  @case ('checking') {
+  <p class="m-0 font-mono text-xs text-muted">Checking device…</p>
+  }
+  @case ('missing') {
+  <div class="panel mx-auto flex w-full max-w-md flex-col items-start gap-4 px-5 py-6">
+    <p class="label m-0">Device #{{ deviceId() }} is not connected</p>
+    @if (closedReason(); as why) {
+    <p class="m-0 font-mono text-2xs text-faint">{{ why }}</p>
+    }
+    <p class="m-0 text-sm leading-relaxed text-muted">
+      It was disconnected, or the server restarted. Connect it again, find it in Discovery, or pick
+      another device from the sidebar.
+    </p>
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="button" class="btn btn-primary" [disabled]="reconnecting()" (click)="reconnect()">
+        {{ reconnecting() ? 'Connecting…' : 'Reconnect' }}
+      </button>
+      <a routerLink="/device-discovery" class="btn no-underline">Open discovery</a>
+    </div>
+    @if (reconnectError(); as err) {
+    <p class="m-0 font-mono text-2xs text-err">{{ err }}</p>
+    }
+  </div>
+  }
+  @default {
+  <racs-essentials class="w-full min-w-0" />
+
+  <div class="grid w-full min-h-0 grid-cols-1 items-start gap-4" [class]="gridColumns()">
+    <!--
+      Mobile: the tabs stick to the top of <main> (-top-4 cancels its padding, which sticky
+      offsets are measured inside), and the live image pins right below them (--live-pin-top).
+    -->
+    <div class="flex w-full min-w-0 flex-col self-start" style="--live-pin-top: calc(2.75rem + 1px - 1rem)">
+      <div role="tablist" aria-label="Acquisition mode"
+        class="flex border border-b-0 border-line bg-surface mobile:sticky mobile:-top-4 mobile:z-10">
+        @for (t of tabs; track t.id) {
+        <button type="button" role="tab" [attr.aria-selected]="tab() === t.id" [title]="t.title"
+          class="h-9 border-b-2 px-4 font-mono text-2xs uppercase tracking-[0.08em] transition-colors hover:text-fg mobile:h-11 mobile:flex-1"
+          [class.border-accent]="tab() === t.id" [class.text-fg]="tab() === t.id"
+          [class.border-transparent]="tab() !== t.id" [class.text-muted]="tab() !== t.id"
+          (click)="selectTab(t.id)">
+          {{ t.label }}
+        </button>
+        }
+        <span class="ml-auto flex items-center px-4 font-mono text-2xs text-faint mobile:hidden">
+          one view at a time · live is shared, a burst holds the camera
+        </span>
+      </div>
+      <!-- Keyed on the device so switching devices starts each view fresh. -->
+      @for (key of [deviceId()]; track key) {
+      @if (tab() === 'live') {
+      <racs-device-live-view class="flex w-full min-w-0 flex-col">
+        <!-- Mobile: inside the live view, so its pinned image stays above them while they scroll. -->
+        @if (layout.isMobile()) {
+        <racs-quick-settings class="flex w-full min-w-0 flex-col" embedded />
+        }
+      </racs-device-live-view>
+      } @else if (tab() === 'burst') {
+      <racs-device-burst class="flex w-full min-w-0 flex-col" [deviceId]="key!" />
+      } @else {
+      <racs-device-cloud class="flex w-full min-w-0 flex-col" [deviceId]="key!" />
+      }
+      }
+      @if (layout.isMobile() && tab() !== 'live') {
+      <racs-quick-settings class="mt-4 flex w-full min-w-0 flex-col" />
+      }
+    </div>
+    @if (maximized()) {
+    <!-- Shown in the overlay below. -->
+    } @else if (layout.isMobile()) {
+    <!-- No inline tree on a phone: the full list opens over the page, the live stream kept running. -->
+    <button type="button" class="panel features-strip" title="Show every GenICam feature"
+      aria-label="Show every GenICam feature" (click)="openMaximized()">
+      <racs-icon name="restore" />
+      <span class="label shrink-0 whitespace-nowrap">GenICam features</span>
+      <span class="min-w-0 flex-1 truncate text-right font-mono text-2xs normal-case text-faint">★ pins show in quick settings</span>
+    </button>
+    } @else if (featuresMinimized()) {
+    <button type="button" class="panel features-strip" title="Show the settings"
+      aria-label="Show the settings" (click)="setFeaturesMinimized(false)">
+      <racs-icon name="restore" />
+      <span class="label">Settings</span>
+    </button>
+    } @else {
+    <!-- Desktop: the quick settings and the full feature tree share this column, one at a time. -->
+    <div class="flex w-full min-w-0 flex-col self-start">
+      <div role="tablist" aria-label="Settings" class="flex items-center border border-b-0 border-line bg-surface">
+        @for (t of sideTabs; track t.id) {
+        <button type="button" role="tab" [attr.aria-selected]="sideTab() === t.id" [title]="t.title"
+          class="h-9 border-b-2 px-4 font-mono text-2xs uppercase tracking-[0.08em] transition-colors hover:text-fg"
+          [class.border-accent]="sideTab() === t.id" [class.text-fg]="sideTab() === t.id"
+          [class.border-transparent]="sideTab() !== t.id" [class.text-muted]="sideTab() !== t.id"
+          (click)="selectSideTab(t.id)">
+          {{ t.label }}
+        </button>
+        }
+        <span class="flex-1"></span>
+        <button type="button" class="icon-btn mr-1.5" title="Minimize the settings"
+          aria-label="Minimize the settings" (click)="setFeaturesMinimized(true)">
+          <racs-icon name="minimize" />
+        </button>
+      </div>
+      @if (sideTab() === 'quick') {
+      <racs-quick-settings class="flex w-full min-w-0 flex-col" />
+      } @else {
+      <racs-device-configuration class="flex min-w-0 flex-col" mode="compact" (maximize)="openMaximized()" />
+      }
+    </div>
+    }
+  </div>
+
+  @if (maximized()) {
+  <div class="fixed inset-0 z-40 flex flex-col bg-bg p-4 mobile:p-0 mobile:pb-[env(safe-area-inset-bottom)]"
+    role="dialog" aria-modal="true"
+    aria-label="All GenICam features">
+    <racs-device-configuration class="flex min-h-0 flex-1 flex-col" mode="max" (closed)="closeMaximized()" />
+  </div>
+  }
+  }
+  }
+</div>

@@ -1,0 +1,7 @@
+services:
+  racs:
+    image: sharerox/racs-website:dev
+    restart: unless-stopped
+    # Host networking: camera discovery broadcasts and the GVSP stream need the camera network.
+    # The website, API and Swagger UI are served on port 8742.
+    network_mode: host

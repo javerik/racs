@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+bundle_dir="${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+# CLI --web-root can override this default through the normal config precedence.
+export RACS_WEB_ROOT="${RACS_WEB_ROOT:-$bundle_dir/usr/share/racs-webapp}"
+export LD_LIBRARY_PATH="$bundle_dir/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$bundle_dir/usr/bin/rust-cam-serve" "$@"

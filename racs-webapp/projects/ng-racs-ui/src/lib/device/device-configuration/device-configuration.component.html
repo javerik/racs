@@ -1,0 +1,158 @@
+<section class="panel flex h-full min-h-[320px] flex-col">
+  @if (layout.isMobile()) {
+  <!-- Mobile: title and Close on top, the filter and the list tools below, all full width. -->
+  <div class="flex flex-col gap-2 border-b border-line px-3 py-2">
+    <div class="flex items-center gap-3">
+      <h2 class="label m-0 flex-1">GenICam features</h2>
+      @if (session.remoteChange(); as change) {
+      <span class="min-w-0 truncate font-mono text-2xs text-faint" [title]="change">{{ change }}</span>
+      }
+      @if (session.busy()) {
+      <span class="inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-muted">
+        <span class="dot animate-pulse bg-warn"></span>Sync
+      </span>
+      }
+      @if (mode() === 'max') {
+      <button type="button" class="btn" (click)="closed.emit()">Close</button>
+      }
+    </div>
+    @if (mode() === 'max') {
+    <input type="search" class="field" placeholder="Filter by name" aria-label="Filter features"
+      [ngModel]="filter()" (ngModelChange)="filter.set($event)" [ngModelOptions]="{standalone: true}" />
+    }
+    <div class="flex items-center gap-2">
+      <select class="field min-w-0 flex-1" aria-label="Visibility" [ngModel]="detailLevel()"
+        (ngModelChange)="setDetailLevel($event)" [ngModelOptions]="{standalone: true}">
+        <option value="beginner">Beginner</option>
+        <option value="expert">Expert</option>
+        <option value="guru">Guru</option>
+        <option value="all">All</option>
+      </select>
+      @if (mode() === 'max') {
+      <button type="button" class="btn px-2.5" (click)="expandAll()">Expand</button>
+      <button type="button" class="btn px-2.5" (click)="collapseAll()">Collapse</button>
+      }
+      <button type="button" class="btn px-2.5" [disabled]="session.loading()" (click)="session.reload()">Reload</button>
+    </div>
+  </div>
+  } @else {
+  <div class="panel-head">
+    <h2 class="label m-0 flex-1">GenICam features</h2>
+    @if (session.remoteChange(); as change) {
+    <span class="min-w-0 max-w-64 truncate font-mono text-2xs text-faint" [title]="change">{{ change }}</span>
+    }
+    @if (session.busy()) {
+    <span class="inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-muted">
+      <span class="dot animate-pulse bg-warn"></span>Sync
+    </span>
+    }
+    @if (mode() === 'max') {
+    <input type="search" class="field w-56" placeholder="Filter by name" aria-label="Filter features"
+      [ngModel]="filter()" (ngModelChange)="filter.set($event)" [ngModelOptions]="{standalone: true}" />
+    <button type="button" class="btn" (click)="expandAll()">Expand all</button>
+    <button type="button" class="btn" (click)="collapseAll()">Collapse</button>
+    }
+    <select class="field w-auto" aria-label="Visibility" [ngModel]="detailLevel()"
+      (ngModelChange)="setDetailLevel($event)" [ngModelOptions]="{standalone: true}">
+      <option value="beginner">Beginner</option>
+      <option value="expert">Expert</option>
+      <option value="guru">Guru</option>
+      <option value="all">All</option>
+    </select>
+    <button type="button" class="btn" [disabled]="session.loading()" (click)="session.reload()">Reload</button>
+    @if (mode() === 'compact') {
+    <button type="button" class="btn" title="Show every feature full screen" (click)="maximize.emit()">
+      Maximize
+    </button>
+    } @else {
+    <button type="button" class="btn" title="Back to the device (Esc)" (click)="closed.emit()">Close</button>
+    }
+  </div>
+  }
+
+  @if (session.holder() === 'burst') {
+  <p class="m-0 border-b border-line px-4 py-2 font-mono text-2xs text-warn">
+    A burst holds the camera: features can't be read or written until it finishes.
+  </p>
+  } @else if (session.readOnlyReason(); as why) {
+  <p class="m-0 border-b border-line px-4 py-2 font-mono text-2xs text-faint">
+    {{ why }}{{ session.role() === 'meta' ? ' · values are not read until the lock ends' : '' }}
+  </p>
+  }
+
+  <div class="min-h-0 flex-1 overflow-auto">
+    @if (session.loading()) {
+    <p class="m-0 px-4 py-6 font-mono text-xs text-muted">Loading categories…</p>
+    } @else if (session.error(); as err) {
+    <div class="notice-err m-3">{{ err }}</div>
+    } @else if (session.categories().length === 0) {
+    <p class="m-0 px-4 py-6 font-mono text-xs text-faint">No categories reported.</p>
+    } @else if (view().length === 0) {
+    <p class="m-0 px-4 py-6 font-mono text-xs text-faint">
+      {{ filter() ? 'No features match the filter at this visibility level.' : 'No features at this visibility level.' }}
+    </p>
+    } @else {
+    <div [class.feature-grid]="mode() === 'max'">
+      @for (cat of view(); track cat.name) {
+      <div class="feature-cat" [class.feature-card]="mode() === 'max'">
+        <button type="button"
+          class="flex h-9 w-full cursor-pointer items-center gap-3 border-none bg-transparent px-4 text-left text-fg hover:bg-raised mobile:h-11"
+          [attr.aria-expanded]="isExpanded(cat.name)" (click)="session.toggleExpanded(cat.name)">
+          <span class="w-3 font-mono text-xs text-muted">{{ isExpanded(cat.name) ? '−' : '+' }}</span>
+          <span class="flex-1 truncate text-sm font-medium">{{ cat.display_name || cat.name }}</span>
+          <span class="font-mono text-2xs text-faint">{{ cat.rows.length }}</span>
+        </button>
+
+        @if (isExpanded(cat.name)) {
+        <div class="border-t border-line bg-bg">
+          @for (row of cat.rows; track row.node.name) {
+          @let node = row.node;
+          <div class="border-b border-line/60 last:border-b-0 hover:bg-raised" [class.bg-surface]="isSelector(node)">
+            <div
+              class="grid grid-cols-[minmax(0,1fr)_1.75rem] items-center gap-x-3 gap-y-2 py-2 pl-10 pr-3 md:grid-cols-[minmax(0,1fr)_minmax(9rem,15rem)_1.75rem] mobile:grid-cols-[minmax(0,1fr)_2.5rem] mobile:pl-4">
+              <div class="flex min-w-0 items-start gap-2" [style.padding-left.rem]="row.depth * 1.25">
+                @if (row.depth > 0) {
+                <span class="-ml-4 w-3 select-none font-mono text-xs leading-5 text-faint">└</span>
+                }
+                <div class="min-w-0">
+                  <p class="m-0 truncate text-sm" [title]="node.display_name">{{ node.display_name || node.name }}</p>
+                  <p class="m-0 mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-2xs text-faint">
+                    <span class="truncate" [title]="node.name">{{ node.name }}</span>
+                    <span class="tag h-4 px-1">{{ accessTag(node) }}</span>
+                    @if (isSelector(node)) {
+                    <span class="tag h-4 border-accent/50 px-1 text-fg"
+                      title="Selector: picks which instance the features nested below it address">Sel</span>
+                    }
+                  </p>
+                  @if (row.selectedBy.length) {
+                  <p class="m-0 truncate font-mono text-2xs text-muted" [title]="'Selected by ' + row.selectedBy.join(', ')">
+                    via {{ row.selectedBy.join(', ') }}
+                  </p>
+                  }
+                </div>
+              </div>
+
+              <racs-feature-control class="col-span-2 md:col-span-1 md:row-start-1 md:col-start-2 mobile:!col-span-2 mobile:!col-start-1 mobile:!row-start-auto" [node]="node"
+                [state]="session.states()[node.name]" [layout]="layout.isMobile() ? 'wide' : 'inline'"
+                [saving]="session.savingNodes().has(node.name)"
+                [error]="session.nodeErrors()[node.name]" [disabled]="session.writeBlocked()"
+                (commit)="session.write(node.name, $event)" (execute)="session.execute(node.name)" />
+
+              <button type="button" class="row-start-1 col-start-2 h-6 w-6 cursor-pointer rounded border-none bg-transparent font-mono text-sm leading-none md:col-start-3 mobile:!col-start-2 mobile:h-10 mobile:w-10 mobile:text-base"
+                [class.text-accent]="isPinned(node.name)" [class.text-faint]="!isPinned(node.name)"
+                [attr.aria-pressed]="isPinned(node.name)"
+                [title]="isPinned(node.name) ? 'Remove from quick settings' : 'Add to quick settings'"
+                (click)="session.togglePin(node.name)">
+                {{ isPinned(node.name) ? '★' : '☆' }}
+              </button>
+            </div>
+          </div>
+          }
+        </div>
+        }
+      </div>
+      }
+    </div>
+    }
+  </div>
+</section>

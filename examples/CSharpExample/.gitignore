@@ -1,0 +1,12 @@
+# IDE/user files
+*.user
+*.suo
+*.DotSettings.user
+
+# Build outputs
+**/bin/
+**/obj/
+
+# Generated runtime artifacts from sample runs
+**/*.runtimeconfig.dev.json
+**/image.jpg

@@ -1,0 +1,545 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "RACS REST API",
+        "description": "A RestAPI for configuring and controlling GEV cameras using Rust and Aravis.",
+        "contact": {
+            "name": "API Support",
+            "email": "racs-support@javerik.space"
+        },
+        "license": {
+            "name": "GPL-2.0-only",
+            "url": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html"
+        },
+        "version": "0.3.0"
+    },
+    "servers": [
+        {
+            "url": "/api/v1",
+            "description": "API version 1"
+        }
+    ],
+    "paths": {
+        "/devices": {
+            "get": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Returns a list of devices that are connected to the network",
+                "operationId": "get_devices",
+                "responses": {
+                    "200": {
+                        "description": "Discovered devices in network. The id is used for connecting to devices",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceConnections"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{id}/connect": {
+            "put": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Connects to a device by id. If the ip is specified, it will be used to connect to the device, choose an id which will be assigned to this device. If the ip is not specified, the device will be discovered using the GV interface. If the device is already connected, this will do nothing.",
+                "operationId": "connect_device",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "ip",
+                        "in": "query",
+                        "description": "IP address of device",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Connect device"
+                    }
+                }
+            }
+        },
+        "/devices/{id}/disconnect": {
+            "put": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Disconnects a device by id. If the device is not connected, this will do nothing.",
+                "operationId": "disconnect_device",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Disconnects device"
+                    }
+                }
+            }
+        },
+        "/devices/{id}/gc/categories": {
+            "get": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Returns the GenICam categories of a device by id. The categories are returned as a list of GenICamNodeCategory structs. Each struct contains the category name and a list of feature nodes. The feature nodes are returned as a list of GenICamNode structs. Each struct contains the node name, node type, and node value. The node value is returned as a string. Use the query parameter value to set the value of the feature. The value must be a string. The value can be retrieved using get devices/{id}/gc/feature/{feature_name} and set using put devices/{id}/gc/feature/{feature_name}?value={value}",
+                "operationId": "get_device_gc_categories",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GenICam categories with feature node info",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/GenICamNodeCategory"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{id}/gc/feature/{feature_name}": {
+            "get": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Returns the GenICam feature value of a device by id. The feature name must match with nodes of /devices/{id}/gc/categories. The value is returned as a string.",
+                "operationId": "get_device_gc_node_value",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "feature_name",
+                        "in": "path",
+                        "description": "Name of the feature",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Get GenICam feature value as string",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Sets the GenICam feature value of a device by id. The feature name must match with nodes of /devices/{id}/gc/categories. The value must be a string. The value can be retrieved using get devices/{id}/gc/feature/{feature_name} and set using put devices/{id}/gc/feature/{feature_name}?value={value}",
+                "operationId": "set_device_gc_node_value",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "feature_name",
+                        "in": "path",
+                        "description": "Name of the feature",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "value",
+                        "in": "query",
+                        "description": "Value as string",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Value has been set"
+                    }
+                }
+            }
+        },
+        "/devices/{id}/stream/frame/jpeg": {
+            "get": {
+                "tags": [
+                    "stream"
+                ],
+                "description": "Grabs a frame from the device and encodes it as a jpeg. The quality can be set using the query parameter quality. The default quality is 80. By default the pixel format is set to MONO8",
+                "operationId": "grab_jpg_frame",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "The ID of the device to grab the frame from",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully started streaming the jpeg frame",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "minimum": 0
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal driver or streaming error",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{id}/stream/frame/raw": {
+            "get": {
+                "tags": [
+                    "stream"
+                ],
+                "description": "Grabs a raw frame from the device.",
+                "operationId": "grab_raw_frame",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "The ID of the device to grab the frame from",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully started streaming the raw frame",
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "minimum": 0
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal driver or streaming error",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{id}/xml": {
+            "get": {
+                "tags": [
+                    "device"
+                ],
+                "description": "Returns the GenICam xml of a device by id.",
+                "operationId": "get_device_xml",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Device id, can be found using get devices",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "minimum": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Xml as string",
+                        "content": {
+                            "application/xml": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "DeviceConnections": {
+                "type": "object",
+                "required": [
+                    "available",
+                    "connected"
+                ],
+                "properties": {
+                    "available": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeviceDiscoverInfo"
+                        }
+                    },
+                    "connected": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeviceDiscoverInfo"
+                        }
+                    }
+                }
+            },
+            "DeviceDiscoverInfo": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "dev_id",
+                    "serial_number",
+                    "vendor",
+                    "model",
+                    "manufacturer_info",
+                    "ip",
+                    "mac"
+                ],
+                "properties": {
+                    "dev_id": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 0
+                    },
+                    "ip": {
+                        "type": "string"
+                    },
+                    "mac": {
+                        "type": "string"
+                    },
+                    "manufacturer_info": {
+                        "type": "string"
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "serial_number": {
+                        "type": "string"
+                    },
+                    "vendor": {
+                        "type": "string"
+                    }
+                }
+            },
+            "GenICamAccessMode": {
+                "type": "string",
+                "enum": [
+                    "Undefined",
+                    "ReadOnly",
+                    "WriteOnly",
+                    "ReadWrite",
+                    "Unknown"
+                ]
+            },
+            "GenICamEnumInfo": {
+                "type": "object",
+                "required": [
+                    "display_name",
+                    "value"
+                ],
+                "properties": {
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "string_value": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "value": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "GenICamNodeCategory": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "display_name",
+                    "nodes"
+                ],
+                "properties": {
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "nodes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/GenICamNodeInfo"
+                        }
+                    }
+                }
+            },
+            "GenICamNodeInfo": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "display_name",
+                    "node_type",
+                    "visibility",
+                    "access_mode"
+                ],
+                "properties": {
+                    "access_mode": {
+                        "$ref": "#/components/schemas/GenICamAccessMode"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "enums": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "items": {
+                            "$ref": "#/components/schemas/GenICamEnumInfo"
+                        }
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "node_type": {
+                        "$ref": "#/components/schemas/GenICamNodeType"
+                    },
+                    "visibility": {
+                        "$ref": "#/components/schemas/GenICamVisibility"
+                    }
+                }
+            },
+            "GenICamNodeType": {
+                "type": "string",
+                "enum": [
+                    "NotImplemented",
+                    "Integer",
+                    "Float",
+                    "String",
+                    "Enum"
+                ]
+            },
+            "GenICamVisibility": {
+                "type": "string",
+                "enum": [
+                    "Beginner",
+                    "Expert",
+                    "Guru",
+                    "Invisible",
+                    "Undefined"
+                ]
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "device",
+            "description": "Connecting devices and configure"
+        }
+    ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "ng-racs-ui",
+  "version": "0.5.0",
+  "description": "Angular components for RACS (rust-cam-serve): live view, burst player, 3D point cloud, GenICam settings, discovery and the whole RACS web UI, with its design system",
+  "keywords": ["angular", "racs", "rust-cam-serve", "gige-vision", "genicam", "machine-vision", "camera", "components", "tailwind"],
+  "license": "GPL-2.0-only",
+  "homepage": "https://git.javerik.dev/opensource/rustcamserve/-/tree/master/racs-webapp/projects/ng-racs-ui",
+  "bugs": "https://git.javerik.dev/opensource/rustcamserve/-/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.javerik.dev/opensource/rustcamserve.git",
+    "directory": "racs-webapp/projects/ng-racs-ui"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "ng-racs-core": "~0.5.0",
+    "rxjs": "~7.8.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "exports": {
+    "./styles/racs-ui": {
+      "sass": "./styles/racs-ui.scss",
+      "style": "./styles/racs-ui.css"
+    },
+    "./styles/*": "./styles/*",
+    "./tailwind-preset.cjs": "./tailwind-preset.cjs"
+  },
+  "sideEffects": ["*.css", "*.scss"]
+}

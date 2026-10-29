@@ -1,0 +1,192 @@
+<section class="panel flex w-full flex-col outline-none" tabindex="-1" (keydown)="onKey($event)">
+  @let j = job();
+  <div class="panel-head">
+    <h2 class="label m-0 flex-1">Burst</h2>
+    @if (!j) {
+    @if (startBlocked(); as why) {
+    <span class="font-mono text-2xs text-faint">{{ why }}</span>
+    }
+    <button type="button" class="btn btn-primary min-w-[6.5rem]" [disabled]="starting() || !!startBlocked()"
+      [title]="startBlocked() ?? 'Capture the frames'" (click)="start()">
+      {{ starting() ? 'Starting…' : 'Start burst' }}
+    </button>
+    } @else if (!terminal()) {
+    <button type="button" class="btn" (click)="cancel()">Cancel</button>
+    } @else {
+    <button type="button" class="btn" [disabled]="!!exporting()" (click)="discard()"
+      title="Delete this burst here and on the server">
+      New burst
+    </button>
+    }
+  </div>
+
+  @if (!j) {
+  <!-- Setup -->
+  <div class="grid grid-cols-1 gap-x-5 gap-y-3 px-4 py-4 sm:grid-cols-2">
+    <label class="flex flex-col gap-1">
+      <span class="label">Frames</span>
+      <input type="number" min="1" [max]="maxCount" class="field" [value]="form().count"
+        (change)="updateForm({ count: $any($event.target).valueAsNumber })" />
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="label">Format</span>
+      <select class="field" [value]="form().format" (change)="updateForm({ format: $any($event.target).value })">
+        <option value="raw">Raw · uncompressed</option>
+        <option value="zstd">Lossless · zstd</option>
+        <option value="jpeg">JPEG · small</option>
+      </select>
+    </label>
+    <label class="flex flex-col gap-1" [class.opacity-40]="form().format === 'jpeg'">
+      <span class="label">Depth</span>
+      <select class="field" [value]="form().depth" [disabled]="form().format === 'jpeg'"
+        (change)="updateForm({ depth: $any($event.target).value })">
+        <option value="mono8">8 bit</option>
+        <option value="mono16">16 bit (Mono10–16)</option>
+      </select>
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="label">On a bad frame</span>
+      <select class="field" [value]="form().onFailure" (change)="updateForm({ onFailure: $any($event.target).value })">
+        <option value="abort">Abort the burst</option>
+        <option value="skip">Skip it and continue</option>
+      </select>
+    </label>
+  </div>
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 font-mono text-2xs text-muted">
+    @if (estimate(); as e) {
+    <span [class.text-warn]="e.warn">
+      ≈ {{ e.label }} in the browser ({{ e.geometry.width }}×{{ e.geometry.height }})
+      @if (e.warn) {
+      · large: consider fewer frames or JPEG
+      }
+    </span>
+    } @else {
+    <span class="text-faint">Frames are captured back to back as fast as the camera delivers.</span>
+    }
+    <span class="ml-auto text-faint mobile:ml-0">stops the live view · holds the camera while capturing</span>
+  </div>
+  } @else {
+  <!-- Progress -->
+  @let total = j.requested_count || 1;
+  <div class="flex flex-col gap-2 px-4 py-3">
+    <div class="relative h-1.5 w-full overflow-hidden bg-raised" role="progressbar" aria-label="Burst progress"
+      [attr.aria-valuenow]="j.captured_count" aria-valuemin="0" [attr.aria-valuemax]="j.requested_count">
+      <div class="absolute inset-y-0 left-0 bg-muted/50 transition-[width]"
+        [style.width.%]="(100 * (j.captured_count + j.failed_count)) / total"></div>
+      <div class="absolute inset-y-0 left-0 bg-accent transition-[width]" [style.width.%]="(100 * fetchedCount()) / total"></div>
+    </div>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted">
+      <span class="inline-flex items-center gap-2 uppercase tracking-[0.08em]" [class.text-fg]="!terminal()">
+        <span class="dot" [class.animate-pulse]="!terminal()" [class.bg-ok]="j.status === 'completed' || !terminal()"
+          [class.bg-err]="j.status === 'failed'" [class.bg-warn]="j.status === 'cancelled'"></span>
+        {{ j.status }}
+      </span>
+      <span>captured <span class="text-fg">{{ j.captured_count }}</span>/{{ j.requested_count }}</span>
+      <span>loaded <span class="text-fg">{{ fetchedCount() }}</span></span>
+      @if (failed().size > 0) {
+      <span class="text-warn">failed {{ failed().size }}</span>
+      }
+      @if (j.width) {
+      <span>{{ j.width }}×{{ j.height }} · {{ j.pixel_format }} · {{ j.format }}</span>
+      }
+      @if (j.expires_at && terminal()) {
+      <span class="ml-auto text-faint" title="Finished bursts are kept on the server for 10 minutes">
+        server copy until {{ j.expires_at | date: 'HH:mm' }}
+      </span>
+      }
+    </div>
+    @if (j.error) {
+    <div class="notice-err">{{ j.error }}</div>
+    }
+  </div>
+  }
+
+  @if (validIndices().length > 0) {
+  <!-- Player -->
+  <racs-frame-canvas class="border-t border-line" interactive viewKey="racs.burst.view"
+    [frame]="current()?.frame ?? null" [range]="range()" [captureTouch]="roi.tool() !== null">
+    <racs-view-tools viewTools />
+    <svg:g racsRoiOverlay overlay />
+  </racs-frame-canvas>
+
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-2">
+    <button type="button" class="btn w-8 px-0 mobile:w-12" title="Previous frame (←)" aria-label="Previous frame"
+      [disabled]="!!exporting()" (click)="step(-1)">‹</button>
+    <button type="button" class="btn btn-primary w-16 mobile:w-20" [disabled]="validIndices().length < 2 || !!exporting()"
+      (click)="togglePlay()" [attr.aria-label]="playing() ? 'Pause' : 'Play'" title="Play / pause (space)">
+      {{ playing() ? 'Pause' : 'Play' }}
+    </button>
+    <button type="button" class="btn w-8 px-0 mobile:w-12" title="Next frame (→)" aria-label="Next frame"
+      [disabled]="!!exporting()" (click)="step(1)">›</button>
+    <!-- On mobile the frame slider gets a row of its own, full width under the buttons. -->
+    <input type="range" class="min-w-[8rem] flex-1 slider mobile:order-last mobile:basis-full" min="0"
+      [max]="slots().length - 1" [value]="index()" aria-label="Frame" [disabled]="!!exporting()"
+      (input)="seek($any($event.target).valueAsNumber)" />
+    <span class="font-mono text-2xs text-muted mobile:ml-auto">
+      #<span class="text-fg">{{ index() }}</span> · {{ timeLabel() }}
+    </span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line px-4 py-2">
+    <label class="flex items-center gap-2">
+      <span class="label">Playback</span>
+      <select class="field w-auto" (change)="playbackFps.set(+$any($event.target).value)">
+        @for (f of playbackFpsChoices; track f) {
+        <option [value]="f" [selected]="f === playbackFps()">{{ f }} fps</option>
+        }
+      </select>
+    </label>
+    <button type="button" class="btn" [attr.aria-pressed]="loop()" [class.!border-accent]="loop()"
+      [class.!text-fg]="loop()" [class.text-muted]="!loop()" title="Start over after the last frame"
+      (click)="loop.set(!loop())">
+      Loop
+    </button>
+    @if (rangeSettings().mode === 'auto') {
+    <label class="flex items-center gap-2" title="Per frame follows each image; whole burst keeps brightness steady">
+      <span class="label">Auto over</span>
+      <select class="field w-auto" [value]="autoScope()" (change)="autoScope.set($any($event.target).value)">
+        <option value="burst">whole burst</option>
+        <option value="frame">each frame</option>
+      </select>
+    </label>
+    }
+  </div>
+
+  <racs-range-control [settings]="rangeSettings()" (settingsChange)="onRangeChange($event)"
+    [bitDepth]="bitDepth()" [resolved]="range()" [stats]="rangeStats()" />
+
+  <racs-roi-analysis [frame]="current()?.frame ?? null" [frames]="frames()" [index]="index()" />
+
+  <div class="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2">
+    <span class="label mr-2 mobile:basis-full">Export</span>
+    @if (exporting(); as x) {
+    <span class="font-mono text-2xs text-muted">{{ x.kind }} {{ (x.progress * 100).toFixed(0) }}%</span>
+    <div class="h-1 w-24 overflow-hidden bg-raised">
+      <div class="h-full bg-accent" [style.width.%]="x.progress * 100"></div>
+    </div>
+    <button type="button" class="btn" (click)="abortExport()">Stop</button>
+    } @else {
+    <button type="button" class="btn" [disabled]="!canRecord || !complete()"
+      [attr.title]="canRecord ? 'Record the burst at the playback rate, with the current range' : 'This browser cannot record video'"
+      (click)="exportWebm()">
+      WebM
+    </button>
+    <button type="button" class="btn" [disabled]="!complete()" title="Every frame as served (zstd decoded to raw), plus meta.json"
+      (click)="downloadOriginal()">
+      {{ j?.format === 'jpeg' ? 'JPEG' : 'Raw' }} zip
+    </button>
+    <button type="button" class="btn" [disabled]="!complete()" title="Every frame as an 8-bit PNG with the current range"
+      (click)="downloadRendered()">
+      PNG zip
+    </button>
+    @if (!complete()) {
+    <span class="font-mono text-2xs text-faint">available once every frame is loaded</span>
+    }
+    }
+  </div>
+  }
+
+  @if (error(); as err) {
+  <div class="notice-err m-3">{{ err }}</div>
+  }
+</section>

@@ -1,0 +1,91 @@
+# Builder images for the CI matrix.
+#
+# aravis-port is pure Rust, so none of these stages build or link a native camera library any
+# more: no Aravis source checkout, no meson/ninja, no glib/libxml2 (or their cross-architecture
+# variants), and no pkg-config wiring. Each stage now only needs a Rust toolchain plus whatever
+# linker its target requires, and the packaging tools that stage is responsible for.
+
+# --- Stage: Debian Build (Bookworm) ---
+FROM rust:slim-bookworm AS debianbuilder
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libfuse2 file wget desktop-file-utils \
+    curl nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT [""]
+
+
+FROM rust:slim-bookworm AS cross-aarch64
+# The cross gcc is retained purely as the Rust linker for the aarch64 target.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc-aarch64-linux-gnu g++-aarch64-linux-gnu crossbuild-essential-arm64 \
+    curl nodejs npm \
+    libfuse2 file desktop-file-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add aarch64-unknown-linux-gnu
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+
+ENTRYPOINT [""]
+
+FROM rust:slim-bookworm AS cross-armhf
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf crossbuild-essential-armhf \
+    libfuse2 file desktop-file-utils \
+    curl nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add armv7-unknown-linux-gnueabihf
+
+ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
+
+ENTRYPOINT [""]
+
+# --- Stage: Windows Cross-Build (MinGW via Fedora) ---
+# Only the MinGW toolchain itself is needed now — previously this stage also pulled
+# mingw64-glib2/libxml2/libusb1 and built Aravis for Windows with meson.
+FROM fedora:41 AS cross-windows
+
+RUN curl -sL https://rpm.nodesource.com/setup_20.x | bash - \
+    && dnf install -y \
+    nodejs \
+    gcc \
+    git \
+    gcc-c++ \
+    mingw64-gcc \
+    mingw64-gcc-c++ \
+    curl \
+    && dnf clean all
+
+# Install Rust via rustup (Fedora's Rust may lag; rustup gives us the exact toolchain)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --no-modify-path
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup target add x86_64-pc-windows-gnu
+
+ENV CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=/usr/bin/x86_64-w64-mingw32-gcc
+
+ENTRYPOINT [""]
+
+# --- Stage: Alpine Build ---
+# No `-C target-feature=-crt-static` override: with no native library to link against, the musl
+# target's default static linking applies and yields a self-contained binary.
+FROM rust:1-alpine3.21 AS alpinebuilder
+
+RUN apk add --no-cache \
+    build-base \
+    curl
+
+ENTRYPOINT [""]
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnetbuilder
+
+RUN apt-get update && apt-get install -y git nodejs npm
+
+FROM python:3.10-slim AS pythonbuilder
+
+RUN apt-get update && apt-get install -y git nodejs npm

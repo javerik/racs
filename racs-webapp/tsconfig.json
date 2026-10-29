@@ -1,0 +1,52 @@
+/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
+/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    // The libraries' sources, so the app and the specs need no library build. Each library's
+    // tsconfig.lib.json maps its dependencies to the ng-packagr output instead.
+    "paths": {
+      "ng-racs-core": ["./projects/ng-racs-core/src/public-api.ts"],
+      "ng-racs-core/testing": ["./projects/ng-racs-core/testing/src/public-api.ts"],
+      "ng-racs-ui": ["./projects/ng-racs-ui/src/public-api.ts"]
+    },
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "preserve"
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/ng-racs-core/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/ng-racs-core/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/ng-racs-ui/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/ng-racs-ui/tsconfig.spec.json"
+    }
+  ]
+}

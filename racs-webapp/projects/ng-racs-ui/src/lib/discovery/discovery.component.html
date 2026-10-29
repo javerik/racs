@@ -1,0 +1,195 @@
+<div class="flex w-full min-w-0 flex-col gap-6">
+  <header class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-4">
+    <div>
+      <p class="label m-0 mb-1">GigE Vision / GVCP</p>
+      <h1 class="m-0 text-lg font-medium">Device discovery</h1>
+    </div>
+    <button type="button" class="btn" [disabled]="registry.discovering()" (click)="refresh()">
+      {{ registry.discovering() ? 'Scanning…' : 'Rescan' }}
+    </button>
+  </header>
+
+  @if (error(); as err) {
+  <div class="notice-err">{{ err }}</div>
+  }
+
+  @if (!registry.discovered()) {
+  @if (registry.discovering()) {
+  <p class="m-0 font-mono text-xs text-muted">Scanning network…</p>
+  }
+  } @else {
+  @let available = registry.available();
+  @let connected = registry.connected();
+  <section class="panel">
+    <div class="panel-head">
+      <h2 class="label m-0 flex-1">Available</h2>
+      <span class="font-mono text-2xs text-faint mobile:hidden">connect as</span>
+      <racs-connect-mode class="mobile:order-last mobile:w-full" />
+      <span class="font-mono text-2xs text-faint">{{ available.length }}</span>
+    </div>
+    @if (available.length === 0) {
+    <p class="m-0 px-4 py-6 font-mono text-xs text-faint">No unconnected devices found.</p>
+    } @else if (layout.isMobile()) {
+    <ul class="m-0 list-none p-0">
+      @for (dev of available; track dev.id) {
+      @let busy = registry.isBusy(dev.id);
+      <li class="flex flex-col gap-2 border-b border-line px-4 py-3 last:border-b-0">
+        <div class="flex items-center gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="m-0 truncate text-sm">{{ dev.model || 'Camera' }}</p>
+            <p class="m-0 mt-0.5 truncate font-mono text-2xs text-faint">#{{ dev.id }} · {{ dev.ip || '—' }}{{ dev.mac ? ' · ' + dev.mac : '' }}</p>
+          </div>
+          <button type="button" class="btn btn-primary w-28 shrink-0" [disabled]="busy" (click)="connect(dev)">
+            {{ busy ? '…' : 'Connect' }}
+          </button>
+        </div>
+        @if (viaIpOpen().has(dev.id)) {
+        <label class="flex flex-col gap-1">
+          <span class="label">Connect via IP</span>
+          <input type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 192.168.10.103" class="field"
+            [value]="ipFor(dev.id)" (input)="setIpHint(dev.id, $any($event.target).value)" />
+        </label>
+        } @else {
+        <button type="button" class="self-start cursor-pointer border-none bg-transparent p-0 font-mono text-2xs text-muted"
+          (click)="openViaIp(dev.id)">+ via IP</button>
+        }
+      </li>
+      }
+    </ul>
+    } @else {
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th class="w-16">ID</th>
+            <th>Model</th>
+            <th>MAC</th>
+            <th>IP</th>
+            <th class="min-w-[10rem]">Connect via IP</th>
+            <th class="w-28"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (dev of available; track dev.id) {
+          <tr class="hover:bg-raised">
+            <td class="font-mono text-xs text-muted">{{ dev.id }}</td>
+            <td>{{ dev.model }}</td>
+            <td class="font-mono text-xs text-muted">{{ dev.mac }}</td>
+            <td class="font-mono text-xs text-muted">{{ dev.ip || '—' }}</td>
+            <td>
+              <input type="text" placeholder="optional" class="field" [value]="ipFor(dev.id)"
+                (input)="setIpHint(dev.id, $any($event.target).value)" />
+            </td>
+            <td>
+              <button type="button" class="btn btn-primary w-full" [disabled]="registry.isBusy(dev.id)"
+                (click)="connect(dev)">
+                {{ registry.isBusy(dev.id) ? '…' : 'Connect' }}
+              </button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2 class="label m-0 flex-1">Connected</h2>
+      <span class="font-mono text-2xs text-faint">{{ connected.length }}</span>
+    </div>
+    @if (connected.length === 0) {
+    <p class="m-0 px-4 py-6 font-mono text-xs text-faint">No device connected.</p>
+    } @else if (layout.isMobile()) {
+    <ul class="m-0 list-none p-0">
+      @for (dev of connected; track dev.id) {
+      @let active = isActive(dev);
+      <li class="flex items-center gap-3 border-b border-l-2 border-b-line pr-4 last:border-b-0"
+        [class.border-l-accent]="active" [class.bg-raised]="active" [class.border-l-transparent]="!active">
+        <a [routerLink]="['/device', dev.id]" class="flex min-w-0 flex-1 items-center gap-3 py-3 pl-[14px] no-underline">
+          <span class="dot shrink-0" [class.bg-accent]="active" [class.bg-ok]="!active"></span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm text-fg">{{ dev.model || 'Camera' }}</span>
+            <span class="mt-0.5 block truncate font-mono text-2xs text-faint">#{{ dev.id }} · {{ dev.ip || '—' }}{{ dev.mac ? ' · ' + dev.mac : '' }}</span>
+            @if (accessLine(dev.id); as line) {
+            <span class="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-2xs text-muted">
+              @if (registry.lockedByOther(dev.id)) {
+              <racs-icon name="lock" class="!h-3 !w-3 shrink-0 text-faint" />
+              }
+              <span class="min-w-0 truncate">{{ line }}</span>
+            </span>
+            }
+          </span>
+        </a>
+        <button type="button" class="btn w-28 shrink-0" [disabled]="registry.isBusy(dev.id)" (click)="disconnect(dev)">
+          {{ registry.isBusy(dev.id) ? '…' : 'Disconnect' }}
+        </button>
+      </li>
+      }
+    </ul>
+    } @else {
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th class="w-16">ID</th>
+            <th>Model</th>
+            <th>MAC</th>
+            <th>IP</th>
+            <th>Access</th>
+            <th class="w-28">State</th>
+            <th class="w-28"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (dev of connected; track dev.id) {
+          <tr role="button" tabindex="0" class="cursor-pointer transition-colors hover:bg-raised"
+            [class.bg-raised]="isActive(dev)" [style.box-shadow]="isActive(dev) ? 'inset 2px 0 0 rgb(var(--accent))' : null"
+            (click)="selectActive(dev)" (keydown.enter)="selectActive(dev)"
+            (keydown.space)="$event.preventDefault(); selectActive(dev)">
+            <td class="font-mono text-xs text-muted">{{ dev.id }}</td>
+            <td>{{ dev.model }}</td>
+            <td class="font-mono text-xs text-muted">{{ dev.mac }}</td>
+            <td class="font-mono text-xs text-muted">{{ dev.ip || '—' }}</td>
+            <td class="font-mono text-2xs text-muted">
+              <span class="inline-flex items-center gap-1.5">
+                @if (registry.lockedByOther(dev.id)) {
+                <racs-icon name="lock" class="!h-3 !w-3 shrink-0 text-faint" />
+                }
+                {{ accessLine(dev.id) ?? '—' }}
+              </span>
+            </td>
+            <td>
+              @if (isActive(dev)) {
+              <span class="inline-flex items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-fg">
+                <span class="dot bg-accent"></span>Selected
+              </span>
+              } @else {
+              <span class="font-mono text-2xs uppercase tracking-[0.08em] text-faint">Open</span>
+              }
+            </td>
+            <td (click)="$event.stopPropagation()">
+              <button type="button" class="btn w-full" [disabled]="registry.isBusy(dev.id)" (click)="disconnect(dev)">
+                {{ registry.isBusy(dev.id) ? '…' : 'Disconnect' }}
+              </button>
+            </td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  </section>
+  }
+
+  @if (registry.connected().length) {
+  <p class="m-0 font-mono text-xs text-muted">
+    @if (layout.isMobile()) {
+    Tap a connected device to open it.
+    } @else {
+    Open a connected device here or from the Device list in the sidebar.
+    }
+  </p>
+  }
+</div>

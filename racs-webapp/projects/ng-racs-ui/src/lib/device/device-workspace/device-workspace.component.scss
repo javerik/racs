@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* The minimized feature tree: a bar under the live view, or a side strip beside it on wide screens. */
+.features-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 1rem;
+  cursor: pointer;
+  color: rgb(var(--muted));
+  transition: color 150ms, background-color 150ms;
+
+  .label {
+    color: inherit;
+  }
+
+  &:hover {
+    color: rgb(var(--fg));
+    background: rgb(var(--raised));
+  }
+
+  &:focus-visible {
+    outline: 1px solid rgb(var(--accent));
+    outline-offset: 1px;
+  }
+
+  @media (min-width: 1280px) {
+    :host-context([data-layout='desktop']) & {
+      writing-mode: vertical-rl;
+      width: 2.25rem;
+      height: auto;
+      padding: 1rem 0;
+    }
+  }
+}
+
+:host-context([data-layout='mobile']) .features-strip {
+  height: 3rem;
+}

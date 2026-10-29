@@ -1,0 +1,8 @@
+[submodule "aravis-port"]
+	path = aravis-port
+	url = https://github.com/javerik/aravis-port.git
+	branch = master
+[submodule "laserthing"]
+	path = laserthing
+	url = ../laserthing.git
+	branch = master

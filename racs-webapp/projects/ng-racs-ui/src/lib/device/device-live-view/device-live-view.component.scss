@@ -1,0 +1,69 @@
+:host {
+  display: flex;
+}
+
+/* Mobile: the image (or its folded bar) sticks below the workspace's sticky Live/Burst tabs. */
+:host-context([data-layout='mobile']) .pin-frame {
+  position: sticky;
+  top: var(--live-pin-top, 0px);
+  z-index: 5;
+  border-bottom: 1px solid rgb(var(--line));
+}
+
+/* A phone on its side has no height to spare for a pinned image. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :host-context([data-layout='mobile']) .pin-frame {
+    position: static;
+  }
+}
+
+/*
+ * The fold handle: a grip line over a thin row (open), or the slim bar that stands in for the
+ * image (folded). Swipes on it are ours, not the page's scroll.
+ */
+.pin-handle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 2rem;
+  padding: 0 1rem;
+  border: 0;
+  border-top: 1px solid rgb(var(--line));
+  background: rgb(var(--surface));
+  color: rgb(var(--muted));
+  cursor: pointer;
+  touch-action: none;
+  transition: background-color 150ms;
+
+  &:active {
+    background: rgb(var(--raised));
+  }
+
+  &:focus-visible {
+    outline: 1px solid rgb(var(--accent));
+    outline-offset: -1px;
+  }
+
+  &.folded {
+    height: 2.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2.5rem;
+    height: 3px;
+    border-radius: 2px;
+    background: rgb(var(--line-strong));
+    transform: translate(-50%, -50%);
+  }
+
+  &.folded .grip {
+    top: 0.375rem;
+    transform: translateX(-50%);
+  }
+}

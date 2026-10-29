@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "racs-python"
+version = "0.5.0"
+authors = [
+    { name="Jonas Ahlf", email="javerik@javerik.space" },
+]
+description = "Client library to access racs api server"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+
+# Added specific version constraints for stability
+dependencies = [
+    "requests>=2.31",
+    "pydantic>=2.0",  # Required for the code provided (V2)
+    "websocket-client>=1.6"  # Live stream
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: OS Independent",
+]
+
+keywords = ["racs", "aravis", "camera", "client", "api", "genicam", "gev", "gigevision"]
+
+[project.urls]
+"Homepage" = "https://codeberg.org/javerik/RACS-RustAravisCamServe"
+"Bug Tracker" = "https://codeberg.org/javerik/RACS-RustAravisCamServe/issues"
+
+[project.optional-dependencies]
+numpy = ["numpy"]  # Frame.to_numpy()
+# Decoding zstd frames. Python 3.14 has zstd built in.
+zstd = ["numpy", "zstandard; python_version < '3.14'"]
+test = ["pytest", "numpy", "zstandard; python_version < '3.14'"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

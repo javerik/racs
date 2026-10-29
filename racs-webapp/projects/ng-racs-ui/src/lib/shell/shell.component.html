@@ -1,0 +1,330 @@
+<!--
+  The shell switches on the layout mode (desktop: sidebar; mobile: top bar, menu and a bottom tab
+  bar). <main> and its outlet stay in place across a switch, so the page (and a live stream) survive.
+-->
+<div class="grid h-full mobile:h-[100dvh] mobile:grid-rows-[auto_minmax(0,1fr)_auto]"
+  [class]="navCollapsed() ? 'desktop:grid-cols-[3rem_minmax(0,1fr)]' : 'desktop:grid-cols-[13rem_minmax(0,1fr)]'">
+  @if (layout.isMobile()) {
+  <header class="relative z-30 flex h-12 items-center gap-3 border-b border-line bg-surface pl-4 pr-1">
+    <span class="h-3 w-3 shrink-0 bg-accent"></span>
+    <span class="font-mono text-sm font-medium tracking-[0.2em]">RACS</span>
+    <span class="min-w-0 flex-1 truncate font-mono text-2xs uppercase tracking-[0.08em] text-muted">
+      {{ pageTitle() }}
+    </span>
+    @if (registry.error()) {
+    <span class="dot shrink-0 bg-err" title="API unreachable"></span>
+    }
+    <button type="button" class="icon-btn" [attr.aria-expanded]="menuOpen()" aria-controls="racs-menu"
+      [attr.aria-label]="menuOpen() ? 'Close menu' : 'Menu'" [title]="menuOpen() ? 'Close menu' : 'Menu'"
+      (click)="menuOpen.set(!menuOpen())">
+      <racs-icon [name]="menuOpen() ? 'close' : 'menu'" />
+    </button>
+
+    @if (menuOpen()) {
+    <div id="racs-menu" class="absolute inset-x-0 top-full flex flex-col gap-4 border-b border-line bg-surface px-4 py-4">
+      <div class="flex flex-col gap-2">
+        <span class="label">Tools</span>
+        @for (tool of tools; track tool.id) {
+        <a [href]="tool.href" target="_blank" rel="noopener" class="btn justify-start gap-3 no-underline"
+          (click)="openTool(tool, $event)">
+          <racs-icon name="laser" class="!h-4 !w-4 shrink-0" />
+          <span class="flex-1 text-left">{{ tool.label }}</span>
+          <racs-icon name="external" class="!h-3.5 !w-3.5 shrink-0 text-faint" />
+        </a>
+        }
+      </div>
+      <div class="flex flex-col gap-2">
+        <span class="label">Client</span>
+        <racs-client-name />
+      </div>
+      <div class="flex flex-col gap-2">
+        <span class="label">Layout</span>
+        <racs-layout-switch />
+      </div>
+      <div class="flex flex-col gap-2">
+        <span class="label">Theme</span>
+        <racs-theme-switch />
+      </div>
+      <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 border-t border-line pt-3">
+        <dt class="label">API</dt>
+        <dd class="m-0 text-right font-mono text-2xs" [class.text-muted]="!registry.error()"
+          [class.text-err]="registry.error()">
+          {{ config.apiBase }}{{ registry.error() ? ' · unreachable' : '' }}
+        </dd>
+        <dt class="label">Connected</dt>
+        <dd class="m-0 text-right font-mono text-2xs text-muted">{{ registry.connected().length }}</dd>
+      </dl>
+    </div>
+    }
+  </header>
+
+  @if (menuOpen()) {
+  <!-- Catches a tap outside the menu. -->
+  <div class="fixed inset-0 z-20 bg-bg/60" aria-hidden="true" (click)="menuOpen.set(false)"></div>
+  }
+
+  } @else if (navCollapsed()) {
+  <!-- The sidebar folded into a rail: the pages and the connected devices, by icon and id. -->
+  <nav class="flex min-w-0 flex-col items-stretch border-r border-line bg-surface" aria-label="Main">
+    <div class="flex h-12 items-center justify-center border-b border-line">
+      <span class="h-3 w-3 bg-accent" title="RACS"></span>
+    </div>
+    <button type="button" class="icon-btn mx-auto mt-2" aria-expanded="false" aria-label="Expand sidebar"
+      title="Expand sidebar" (click)="toggleNav()">
+      <racs-icon name="sidebar-expand" />
+    </button>
+
+    <div class="flex flex-1 flex-col py-2">
+      @for (item of nav; track item.path) {
+      <a [routerLink]="item.path" routerLinkActive="!border-accent bg-raised !text-fg" #rla="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: !item.devices }" [attr.aria-current]="rla.isActive ? 'page' : null"
+        [attr.aria-label]="item.label" [title]="item.label"
+        class="relative flex h-9 items-center justify-center border-l-2 border-transparent text-muted no-underline transition-colors hover:text-fg">
+        <racs-icon [name]="item.devices ? 'camera' : 'discover'" class="!h-4 !w-4"
+          [class.animate-pulse]="!item.devices && registry.discovering()" />
+        @let count = item.devices ? registry.connected().length : registry.available().length;
+        @if (count > 0) {
+        <span class="absolute right-1 top-1 font-mono text-2xs leading-none text-faint">{{ count }}</span>
+        }
+      </a>
+      @if (item.devices) {
+      <ul class="m-0 list-none p-0 pb-2" aria-label="Connected devices">
+        @for (dev of registry.connected(); track dev.id) {
+        @let active = selection.selectedDeviceId() === dev.id;
+        @let busy = registry.isBusy(dev.id);
+        <li>
+          <a [routerLink]="['/device', dev.id]" [attr.aria-current]="active ? 'page' : null"
+            [title]="(dev.model || 'Camera') + ' · ' + (dev.ip || '—') + lockTitle(dev.id)"
+            class="flex h-7 items-center justify-center gap-1 border-l-2 font-mono text-2xs no-underline transition-colors hover:bg-raised hover:text-fg"
+            [class.border-accent]="active" [class.border-transparent]="!active" [class.text-fg]="active"
+            [class.text-muted]="!active">
+            <span class="dot shrink-0" [class.animate-pulse]="busy" [class.bg-warn]="busy"
+              [class.bg-accent]="!busy && active" [class.bg-ok]="!busy && !active"></span>
+            #{{ dev.id }}
+            @if (registry.lockedByOther(dev.id)) {
+            <racs-icon name="lock" class="!h-2.5 !w-2.5 shrink-0 text-faint" />
+            }
+          </a>
+        </li>
+        }
+      </ul>
+      }
+      }
+
+      <div class="mx-2 my-2 border-t border-line"></div>
+      @for (tool of tools; track tool.id) {
+      <a [href]="tool.href" target="_blank" rel="noopener" (click)="openTool(tool, $event)"
+        [attr.aria-label]="tool.label + ' (new window)'" [title]="tool.label + ' · opens in a new window'"
+        class="flex h-9 items-center justify-center border-l-2 border-transparent text-muted no-underline transition-colors hover:text-fg">
+        <racs-icon name="laser" class="!h-4 !w-4" />
+      </a>
+      }
+    </div>
+
+    @if (actionError(); as err) {
+    <span class="dot mx-auto mb-2 bg-err" role="alert" [title]="err" [attr.aria-label]="err"></span>
+    }
+    @if (registry.error()) {
+    <span class="mx-auto mb-3 font-mono text-2xs text-err" title="API unreachable">API</span>
+    }
+  </nav>
+
+  } @else {
+  <nav class="flex flex-col items-stretch border-r border-line bg-surface">
+    <div class="flex h-12 items-center gap-2 border-b border-line pl-4 pr-2">
+      <span class="h-3 w-3 bg-accent"></span>
+      <span class="flex-1 font-mono text-sm font-medium tracking-[0.2em]">RACS</span>
+      <button type="button" class="icon-btn" aria-expanded="true" aria-label="Collapse sidebar"
+        title="Collapse sidebar" (click)="toggleNav()">
+        <racs-icon name="sidebar-collapse" />
+      </button>
+    </div>
+
+    <div class="flex flex-1 flex-col py-3">
+      @for (item of nav; track item.path; let i = $index) {
+      <!-- The active marker sits on the wrapper so it also spans the row's buttons. -->
+      <div routerLinkActive="!border-accent bg-raised" #rla="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: !item.devices }"
+        class="flex items-center border-l-2 border-transparent">
+        <a [routerLink]="item.path"
+          class="flex h-9 min-w-0 flex-1 items-center gap-3 px-4 font-mono text-xs uppercase tracking-[0.08em] no-underline transition-colors hover:text-fg"
+          [class.text-fg]="rla.isActive" [class.text-muted]="!rla.isActive">
+          <span class="text-faint">{{ (i + 1).toString().padStart(2, '0') }}</span>
+          {{ item.label }}
+          @if (item.devices && registry.connected().length > 0) {
+          <span class="ml-auto text-2xs text-faint">{{ registry.connected().length }}</span>
+          }
+          @if (!item.devices && registry.available().length > 0) {
+          <span class="ml-auto text-2xs text-faint">{{ registry.available().length }}</span>
+          }
+        </a>
+        @if (!item.devices) {
+        <button type="button" class="icon-btn mr-3"
+          [disabled]="registry.discovering()" [attr.aria-busy]="registry.discovering()"
+          [title]="registry.discovering() ? 'Discovering…' : 'Discover devices on the network'"
+          aria-label="Discover devices" (click)="discover()">
+          <racs-icon name="discover" [class.animate-pulse]="registry.discovering()" />
+        </button>
+        }
+      </div>
+
+      @if (!item.devices) {
+      @if (registry.available().length > 0) {
+      <label class="flex items-center gap-2 py-1 pl-9 pr-4">
+        <span class="font-mono text-2xs text-faint">connect as</span>
+        <racs-connect-mode compact />
+      </label>
+      }
+      <ul class="m-0 list-none p-0 pb-2" aria-label="Discovered devices">
+        @for (dev of registry.available(); track dev.id) {
+        @let busy = registry.isBusy(dev.id);
+        <li class="group relative">
+          <div class="flex flex-col gap-0.5 py-1.5 pl-9 pr-4 transition-colors group-hover:bg-raised"
+            [title]="dev.vendor + ' ' + dev.model + ' · ' + dev.mac">
+            <span class="flex min-w-0 items-center gap-2 text-xs text-muted group-hover:text-fg">
+              <span class="dot shrink-0 border border-faint" [class.animate-pulse]="busy" [class.bg-warn]="busy"></span>
+              <span class="truncate">{{ dev.model || 'Camera' }}</span>
+            </span>
+            <span class="truncate pl-3.5 font-mono text-2xs text-faint">#{{ dev.id }} · {{ dev.ip || '—' }}</span>
+          </div>
+          <button type="button" class="icon-btn row-action hover:!border-accent hover:!text-accent"
+            [disabled]="busy" [attr.aria-label]="'Connect ' + (dev.model || 'camera') + ' #' + dev.id"
+            [title]="busy ? 'Connecting…' : 'Connect · ' + registry.connectMode()" (click)="connect(dev)">
+            <racs-icon name="connect" />
+          </button>
+        </li>
+        } @empty {
+        <li class="py-1.5 pl-9 pr-4 font-mono text-2xs text-faint">
+          @if (registry.discovering()) {
+          scanning…
+          } @else if (registry.discovered()) {
+          nothing new found
+          } @else {
+          not scanned yet
+          }
+        </li>
+        }
+      </ul>
+      } @else {
+      <ul class="m-0 list-none p-0 pb-2" aria-label="Connected devices">
+        @for (dev of registry.connected(); track dev.id) {
+        @let active = selection.selectedDeviceId() === dev.id;
+        @let busy = registry.isBusy(dev.id);
+        <li class="group relative">
+          <a [routerLink]="['/device', dev.id]" [attr.aria-current]="active ? 'page' : null"
+            class="flex flex-col gap-0.5 border-l-2 py-1.5 pl-9 pr-4 no-underline transition-colors group-hover:bg-raised"
+            [class.border-accent]="active" [class.border-transparent]="!active">
+            <span class="flex min-w-0 items-center gap-2 text-xs" [class.text-fg]="active"
+              [class.text-muted]="!active">
+              <span class="dot shrink-0" [class.animate-pulse]="busy" [class.bg-warn]="busy"
+                [class.bg-accent]="!busy && active" [class.bg-ok]="!busy && !active"></span>
+              <span class="truncate group-hover:text-fg">{{ dev.model || 'Camera' }}</span>
+              @if (registry.lockedByOther(dev.id)) {
+              <racs-icon name="lock" class="!h-3 !w-3 shrink-0 text-faint" [title]="lockTitle(dev.id).slice(3)" />
+              }
+            </span>
+            <span class="truncate pl-3.5 font-mono text-2xs text-faint">#{{ dev.id }} · {{ dev.ip || '—' }}</span>
+          </a>
+          <button type="button" class="icon-btn row-action hover:!border-err hover:!text-err"
+            [disabled]="busy"
+            [attr.aria-label]="'Disconnect ' + (dev.model || 'camera') + ' #' + dev.id"
+            [title]="busy ? 'Disconnecting…' : 'Disconnect'" (click)="disconnect(dev)">
+            <racs-icon name="disconnect" />
+          </button>
+        </li>
+        } @empty {
+        <li class="py-1.5 pl-9 pr-4 font-mono text-2xs text-faint">
+          @if (registry.loaded()) {
+          none · connect one under Discovery
+          } @else {
+          …
+          }
+        </li>
+        }
+      </ul>
+      }
+      }
+
+      <!-- Bundled tools, each opened in a window of its own. -->
+      <span class="label mt-2 border-t border-line px-4 pb-1 pt-3">Tools</span>
+      <ul class="m-0 list-none p-0 pb-2" aria-label="Tools">
+        @for (tool of tools; track tool.id) {
+        <li>
+          <a [href]="tool.href" target="_blank" rel="noopener" (click)="openTool(tool, $event)"
+            [title]="tool.label + ' · opens in a new window'"
+            class="flex h-9 items-center gap-3 border-l-2 border-transparent px-4 font-mono text-xs uppercase tracking-[0.08em] text-muted no-underline transition-colors hover:bg-raised hover:text-fg">
+            <racs-icon name="laser" class="!h-3.5 !w-3.5 shrink-0 text-faint" />
+            <span class="min-w-0 flex-1 truncate">{{ tool.label }}</span>
+            <racs-icon name="external" class="!h-3 !w-3 shrink-0 text-faint" />
+          </a>
+        </li>
+        }
+      </ul>
+
+      @if (actionError(); as err) {
+      <p class="m-0 mx-4 mb-2 break-words font-mono text-2xs text-err" role="alert">{{ err }}</p>
+      }
+    </div>
+
+    <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-line px-4 py-3">
+      <dt class="label">Device</dt>
+      <dd class="m-0 text-right font-mono text-2xs">
+        @let id = selection.selectedDeviceId();
+        @if (id !== null) {
+        <span class="text-fg">#{{ id }}</span>
+        } @else {
+        <span class="text-faint">none</span>
+        }
+      </dd>
+      <dt class="label">API</dt>
+      <dd class="m-0 text-right font-mono text-2xs" [class.text-muted]="!registry.error()"
+        [class.text-err]="registry.error()" [attr.title]="registry.error()">
+        {{ config.apiBase }}
+      </dd>
+      <dt class="label col-span-2 mt-2">Client</dt>
+      <dd class="col-span-2 m-0">
+        <racs-client-name />
+      </dd>
+      <dt class="label col-span-2 mt-2">Layout</dt>
+      <dd class="col-span-2 m-0">
+        <racs-layout-switch />
+      </dd>
+      <dt class="label col-span-2 mt-2">Theme</dt>
+      <dd class="col-span-2 m-0">
+        <racs-theme-switch />
+      </dd>
+    </dl>
+  </nav>
+
+  }
+
+  <main class="min-w-0 overflow-auto desktop:p-6 mobile:px-3 mobile:py-4">
+    @if (layout.isMobile() && actionError(); as err) {
+    <div class="notice-err mb-3 break-words" role="alert">{{ err }}</div>
+    }
+    <router-outlet />
+  </main>
+
+  @if (layout.isMobile()) {
+  <nav class="grid grid-cols-2 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]" aria-label="Main">
+    @for (item of nav; track item.path) {
+    <a [routerLink]="item.path" routerLinkActive #rla="routerLinkActive"
+      [routerLinkActiveOptions]="{ exact: !item.devices }" [attr.aria-current]="rla.isActive ? 'page' : null"
+      class="relative flex h-14 flex-col items-center justify-center gap-1 font-mono text-2xs uppercase tracking-[0.08em] no-underline transition-colors"
+      [class.text-fg]="rla.isActive" [class.text-muted]="!rla.isActive">
+      <span class="absolute inset-x-0 -top-px h-0.5" [class.bg-accent]="rla.isActive"></span>
+      <racs-icon [name]="item.devices ? 'camera' : 'discover'" class="!h-4 !w-4" />
+      <span>
+        {{ item.label }}
+        @if (item.devices && registry.connected().length > 0) {
+        <span class="text-faint">{{ registry.connected().length }}</span>
+        }
+        @if (!item.devices && registry.available().length > 0) {
+        <span class="text-faint">{{ registry.available().length }}</span>
+        }
+      </span>
+    </a>
+    }
+  </nav>
+  }
+</div>

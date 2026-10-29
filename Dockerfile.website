@@ -1,0 +1,62 @@
+# --- RACS Build Stage ---
+FROM rust:1-alpine3.21 AS racs-builder
+
+# aravis-port is pure Rust: no Aravis C checkout, no meson/glib/gstreamer/libxml2, and no
+# pkg-config or dynamic-linking override needed. build-base covers the vendored C in actix-web's
+# zstd; curl is needed by utoipa-swagger-ui's build script.
+RUN apk add --no-cache build-base curl
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY aravis-port ./aravis-port
+COPY src ./src
+
+RUN cargo build --release
+
+# --- Laserline Build Stage ---
+# The laserline web app (submodule laserthing/), served under /tools/laserline/.
+FROM node:22-bookworm AS laserline-builder
+
+ENV PATH=/root/.cargo/bin:$PATH
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --target wasm32-unknown-unknown
+
+WORKDIR /src
+COPY scripts/build-laserline.sh ./scripts/
+COPY laserthing ./laserthing
+RUN scripts/build-laserline.sh /out
+
+# --- Website Build Stage ---
+FROM node:22-alpine AS web-builder
+
+WORKDIR /app
+
+COPY racs-webapp/package.json racs-webapp/package-lock.json ./
+RUN npm ci
+
+COPY racs-webapp/ ./
+RUN npm run build
+
+# --- Runtime Stage ---
+FROM alpine:3.21
+
+# The RACS binary is statically linked and serves the website itself (like the webapp AppImage):
+# no nginx, no start script, one process for the website, REST API, WebSockets and Swagger.
+RUN apk update && apk upgrade
+
+RUN adduser -D -s /bin/false rustcam
+WORKDIR /app
+
+COPY --from=racs-builder /app/target/release/rust-cam-serve /app/rust-cam-serve
+COPY --from=web-builder /app/dist/racs-webapp/browser/ /app/web/
+COPY --from=laserline-builder /out/tools/ /app/web/tools/
+
+RUN chown rustcam:rustcam /app/rust-cam-serve
+
+# --web-root overrides this through the normal config precedence.
+ENV RACS_WEB_ROOT=/app/web
+
+USER rustcam
+EXPOSE 8742
+
+CMD ["./rust-cam-serve"]

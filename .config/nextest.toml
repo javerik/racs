@@ -1,0 +1,9 @@
+# `cargo nextest run --profile ci` (GitLab CI): runs every test and writes a JUnit report
+# to target/nextest/ci/junit.xml for the job's `reports: junit`.
+[profile.ci]
+fail-fast = false
+
+[profile.ci.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true

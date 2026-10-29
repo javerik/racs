@@ -1,0 +1,492 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+      - 'feat_**'
+      - 'bugfix_**'
+    tags:
+      - '*'
+  pull_request:
+
+env:
+  VERSION: "2"
+  APPIMAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+  REGISTRY: codeberg.org
+  IMAGE: codeberg.org/${{ github.repository }}
+  IMAGE_NAME: racs
+  IMAGE_NAME_WEBSITE: racs-website
+  # Artifact retention per ref: master/tags >= 6 months, dev >= 1 month, others 1 day.
+  ARTIFACT_RETENTION_DAYS: ${{ (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')) && 185 || github.ref == 'refs/heads/dev' && 31 || 1 }}
+
+jobs:
+  # ==========================================
+  # CI PHASE: Build & Test
+  # Runs on all branches, PRs, and tags
+  # ==========================================
+  build-webapp:
+    runs-on: racs-builder
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test racs-webapp
+        working-directory: racs-webapp
+        run: |
+          npm ci
+          npm test -- --watch=false
+          npm run build
+          # The Angular libraries (ng-racs-core, ng-racs-ui), packed and built into an outside app.
+          npm run build:libs
+          npm run pack:libs
+          cd examples/consumer
+          npx -y npm@11.21.1 install --no-save ../../dist/packages/ng-racs-core-*.tgz ../../dist/packages/ng-racs-ui-*.tgz
+          npx ng build
+      - uses: actions/upload-artifact@v3
+        with:
+          name: racs-webapp-assets
+          path: racs-webapp/dist/racs-webapp/browser/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  build-debian:
+    runs-on: racs-builder
+    container:
+      image: sharerox/racs@sha256:cfc887b2edd39d0a0fe3ffe37a404cb4906fc9ce1f9b2a0b0870cf21476fddaf
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache Rust Dependencies
+        uses: https://github.com/Swatinem/rust-cache@v2
+      - name: Build (x86_64)
+        run: cargo build --release
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rust-cam-serve-x86_64
+          path: target/release/rust-cam-serve
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  build-aarch64:
+    runs-on: racs-builder
+    container:
+      image: sharerox/racs@sha256:c664ae32735f8aa71b6eafc3e4caa6978ed6e6321ae4f30be583f8bcbeec701d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache Rust Dependencies
+        uses: https://github.com/Swatinem/rust-cache@v2
+      - name: Build (aarch64)
+        run: cargo build --release --target aarch64-unknown-linux-gnu
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rust-cam-serve-aarch64
+          path: target/aarch64-unknown-linux-gnu/release/rust-cam-serve
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  build-armhf:
+    runs-on: racs-builder
+    container:
+      image: sharerox/racs@sha256:645dd79d7e66d530477edb4709d0f9bdd708b62b7f07b076a0ab951f1212e904
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache Rust Dependencies
+        uses: https://github.com/Swatinem/rust-cache@v2
+      - name: Build (armhf)
+        run: cargo build --release --target armv7-unknown-linux-gnueabihf
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rust-cam-serve-armhf
+          path: target/armv7-unknown-linux-gnueabihf/release/rust-cam-serve
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  build-windows:
+    needs: [build-webapp]
+    runs-on: racs-builder
+    container:
+      image: sharerox/racs@sha256:413d0c7f06ad452f8d738f772949171d171c5a0e1222ff5fdfbcba8963b2b467
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: racs-webapp-assets
+          path: racs-webapp/dist/racs-webapp/browser/
+      - name: Cache Rust Dependencies
+        uses: https://github.com/Swatinem/rust-cache@v2
+      - name: Build (windows)
+        run: cargo build --release --target x86_64-pc-windows-gnu
+      - name: Create dist (windows)
+        run: |
+          mkdir -p dist
+          cp target/x86_64-pc-windows-gnu/release/rust-cam-serve.exe dist/racs-api.exe
+          cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll dist/
+          (cd dist && zip -r ../racs-api-windows-x86_64.zip .)
+          mv dist/racs-api.exe dist/racs-webapp.exe
+          mkdir -p dist/web
+          cp -a racs-webapp/dist/racs-webapp/browser/. dist/web/
+          (cd dist && zip -r ../racs-webapp-windows-x86_64.zip .)
+      - uses: actions/upload-artifact@v3
+        with:
+          name: rust-cam-serve-windows-zip
+          path: racs-api-windows-x86_64.zip
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: webapp-windows-zip
+          path: racs-webapp-windows-x86_64.zip
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # Only x86_64 is testable here: the other three build jobs cross-compile and the
+  # runners have no emulator. All live-camera tests are #[ignore]d, so this is the
+  # unit tests plus the fake-camera and HTTP-contract integration targets.
+  test:
+    runs-on: racs-builder
+    container:
+      image: sharerox/racs@sha256:cfc887b2edd39d0a0fe3ffe37a404cb4906fc9ce1f9b2a0b0870cf21476fddaf
+    env:
+      # Keep the runner off the network: a test reaching GET /devices would otherwise
+      # broadcast on the container's real interface and burn the full discovery timeout.
+      # Mirrors what http_contract.rs and burst_grab.rs already set for themselves.
+      RACS_DISCOVERY_BIND: 127.0.0.1
+      RACS_DISCOVERY_TIMEOUT_MS: "50"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Cache Rust Dependencies
+        uses: https://github.com/Swatinem/rust-cache@v2
+      # --release: the fake camera runs a 10 ms frame period and the JPEG path is a real
+      # encode, so a debug build makes both slower and the timing margins thinner.
+      - name: Test (x86_64)
+        run: cargo test --release
+
+  # ==========================================
+  # CD PHASE: Package AppImages
+  # Only runs on master, dev, and tags
+  # ==========================================
+  package-appimage-x86:
+    needs: [build-debian, test]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:cfc887b2edd39d0a0fe3ffe37a404cb4906fc9ce1f9b2a0b0870cf21476fddaf
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-x86_64
+          path: target/release/
+      - name: Set executable bit
+        run: chmod +x target/release/rust-cam-serve
+      - name: Build AppImage (x86_64)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh x86_64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: appimage-x86
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  package-appimage-aarch64:
+    needs: [build-aarch64, test]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:c664ae32735f8aa71b6eafc3e4caa6978ed6e6321ae4f30be583f8bcbeec701d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-aarch64
+          path: target/aarch64-unknown-linux-gnu/release/
+      - name: Set executable bit
+        run: chmod +x target/aarch64-unknown-linux-gnu/release/rust-cam-serve
+      - name: Build AppImage (aarch64)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh aarch64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: appimage-aarch64
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  package-appimage-armhf:
+    needs: [build-armhf, test]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:645dd79d7e66d530477edb4709d0f9bdd708b62b7f07b076a0ab951f1212e904
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-armhf
+          path: target/armv7-unknown-linux-gnueabihf/release/
+      - name: Set executable bit
+        run: chmod +x target/armv7-unknown-linux-gnueabihf/release/rust-cam-serve
+      - name: Install packaging utilities
+        run: apt-get update && apt-get install -y file desktop-file-utils
+      - name: Build AppImage (armhf)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh armhf
+      - uses: actions/upload-artifact@v3
+        with:
+          name: appimage-armhf
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  # ==========================================
+  # CD PHASE: Package bundled webapp AppImages
+  # Only runs on master, dev, and tags
+  # ==========================================
+  package-webapp-appimage-x86:
+    needs: [build-debian, test, build-webapp]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:cfc887b2edd39d0a0fe3ffe37a404cb4906fc9ce1f9b2a0b0870cf21476fddaf
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-x86_64
+          path: target/release/
+      - uses: actions/download-artifact@v3
+        with:
+          name: racs-webapp-assets
+          path: racs-webapp/dist/racs-webapp/browser/
+      - name: Set executable bit
+        run: chmod +x target/release/rust-cam-serve
+      - name: Build AppImage (x86_64)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh x86_64 webapp
+      - uses: actions/upload-artifact@v3
+        with:
+          name: webapp-appimage-x86
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  package-webapp-appimage-aarch64:
+    needs: [build-aarch64, test, build-webapp]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:c664ae32735f8aa71b6eafc3e4caa6978ed6e6321ae4f30be583f8bcbeec701d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-aarch64
+          path: target/aarch64-unknown-linux-gnu/release/
+      - uses: actions/download-artifact@v3
+        with:
+          name: racs-webapp-assets
+          path: racs-webapp/dist/racs-webapp/browser/
+      - name: Set executable bit
+        run: chmod +x target/aarch64-unknown-linux-gnu/release/rust-cam-serve
+      - name: Build AppImage (aarch64)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh aarch64 webapp
+      - uses: actions/upload-artifact@v3
+        with:
+          name: webapp-appimage-aarch64
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+  package-webapp-appimage-armhf:
+    needs: [build-armhf, test, build-webapp]
+    runs-on: racs-builder
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: sharerox/racs@sha256:645dd79d7e66d530477edb4709d0f9bdd708b62b7f07b076a0ab951f1212e904
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-armhf
+          path: target/armv7-unknown-linux-gnueabihf/release/
+      - uses: actions/download-artifact@v3
+        with:
+          name: racs-webapp-assets
+          path: racs-webapp/dist/racs-webapp/browser/
+      - name: Set executable bit
+        run: chmod +x target/armv7-unknown-linux-gnueabihf/release/rust-cam-serve
+      - name: Install packaging utilities
+        run: apt-get update && apt-get install -y file desktop-file-utils
+      - name: Build AppImage (armhf)
+        run: |
+          mkdir -p bin
+          cd appimage
+          APPIMAGE_OUTPUT_DIR="$PWD/../bin" ./build.sh armhf webapp
+      - uses: actions/upload-artifact@v3
+        with:
+          name: webapp-appimage-armhf
+          path: bin/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+
+  # ==========================================
+  # CD PHASE: Create GitHub/Forgejo Release
+  # Only runs on tags
+  # ==========================================
+  release:
+    runs-on: racs-builder
+    needs:
+      - package-appimage-x86
+      - package-webapp-appimage-x86
+      - package-appimage-aarch64
+      - package-webapp-appimage-aarch64
+      - package-appimage-armhf
+      - package-webapp-appimage-armhf
+      - build-windows
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: appimage-x86
+          path: bin/x86/
+      - uses: actions/download-artifact@v3
+        with:
+          name: appimage-aarch64
+          path: bin/aarch64/
+      - uses: actions/download-artifact@v3
+        with:
+          name: appimage-armhf
+          path: bin/armhf/
+      - uses: actions/download-artifact@v3
+        with:
+          name: rust-cam-serve-windows-zip
+          path: bin/
+      - uses: actions/download-artifact@v3
+        with:
+          name: webapp-windows-zip
+          path: bin/
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: webapp-appimage-x86
+          path: bin/webapp-x86/
+      - uses: actions/download-artifact@v3
+        with:
+          name: webapp-appimage-aarch64
+          path: bin/webapp-aarch64/
+      - uses: actions/download-artifact@v3
+        with:
+          name: webapp-appimage-armhf
+          path: bin/webapp-armhf/
+
+      - name: Create Release and Upload Assets
+        # Use the Gitea/Forgejo native release action
+        uses: https://gitea.com/actions/gitea-release-action@main
+        with:
+          files: |
+            bin/x86/*.AppImage
+            bin/webapp-x86/*.AppImage
+            bin/aarch64/*.AppImage
+            bin/webapp-aarch64/*.AppImage
+            bin/armhf/*.AppImage
+            bin/webapp-armhf/*.AppImage
+            bin/racs-api-windows-x86_64.zip
+            bin/racs-webapp-windows-x86_64.zip
+          # Pass the automatically generated token
+          api_key: ${{ secrets.FORGEJO_TOKEN }}
+
+  # ==========================================
+  # CD PHASE: Docker Build & Deploy
+  # Only runs on master, dev, and tags
+  # ==========================================
+  docker-build-push:
+    needs: test
+    runs-on: docker
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/')
+    container:
+      image: catthehacker/ubuntu:act-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Wait for Docker
+        run: |
+          until docker info; do
+            echo "Waiting for Docker daemon..."
+            sleep 3
+          done
+
+      - name: Set image tag
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # If it's a git tag (e.g., v1.0), use the tag name and mark as release
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == 'refs/heads/dev' ]]; then
+            # If it's the dev branch, strictly use 'dev'
+            echo "tag=dev" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          else
+            # If it's master, use 'latest'
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and Push racs-api-server image
+        run: |
+          REPO="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          # Build and push the primary tag (dev, latest, or vX.X.X)
+          docker build --tag $REPO:$TAG .
+          docker push $REPO:$TAG
+
+          # If this was triggered by a version tag, ALSO update the 'latest' image
+          if [[ "${{ steps.meta.outputs.is_release }}" == "true" ]]; then
+            docker tag $REPO:$TAG $REPO:latest
+            docker push $REPO:latest
+          fi
+      - name: Build and Push racs-website image
+        run: |
+          REPO="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME_WEBSITE }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+
+          # Build and push the primary tag (dev, latest, or vX.X.X)
+          docker build --tag $REPO:$TAG -f Dockerfile.website .
+          docker push $REPO:$TAG
+
+          # If this was triggered by a version tag, ALSO update the 'latest' image
+          if [[ "${{ steps.meta.outputs.is_release }}" == "true" ]]; then
+            docker tag $REPO:$TAG $REPO:latest
+            docker push $REPO:latest
+          fi

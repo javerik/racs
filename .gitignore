@@ -1,0 +1,7 @@
+/target
+/bin/
+.venv/
+claude-*.md
+CLAUDE.md.claude/
+/laserline-dist/
+.claude/commands/*

@@ -1,0 +1,182 @@
+/* Theme tokens: one block per theme, selected by data-theme on <html> (ThemeService). */
+:root,
+[data-theme='technical-dark'] {
+  color-scheme: dark;
+
+  /*
+   * Style tokens: what the Light theme changes besides colour. The shared component classes
+   * below (.label, .btn, .tag, .tbl th) and Tailwind's `rounded` read them.
+   */
+  --radius: 2px;
+  --chrome-font: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --chrome-case: uppercase;
+  --chrome-tracking: 0.12em;
+  --chrome-tracking-tight: 0.08em;
+
+  --bg: 12 14 16; /* #0c0e10 */
+  --surface: 18 21 24; /* #121518 */
+  --raised: 24 28 32; /* #181c20 */
+  --line: 35 40 45; /* #23282d */
+  --line-strong: 52 59 66; /* #343b42 */
+
+  --fg: 228 231 234; /* #e4e7ea */
+  --muted: 139 147 155; /* #8b939b */
+  --faint: 90 97 105; /* #5a6169 */
+
+  /* Space-separated RGB channels so Tailwind's `/opacity` modifiers work; use as rgb(var(--x)). */
+  /* Brand red (accent) is reserved for primary actions and the active selection. */
+  --accent: 214 41 56; /* #d62938 */
+  --ok: 63 185 80; /* #3fb950 */
+  --warn: 212 167 44; /* #d4a72c */
+  --err: 240 82 74; /* #f0524a */
+
+  /*
+   * Series: the identity of soft ROIs (overlay, stats row, plot line), in this fixed order.
+   * Validated as a categorical set on surface and bg (adjacent CVD ΔE ≥ 8, normal-vision ≥ 15,
+   * ≥ 3:1 contrast); clear of the accent and the state colours. Never for anything but ROIs.
+   */
+  --series-1: 57 135 229; /* #3987e5 blue */
+  --series-2: 194 122 46; /* #c27a2e ochre */
+  --series-3: 31 154 169; /* #1f9aa9 teal */
+  --series-4: 144 133 233; /* #9085e9 violet */
+  --series-5: 146 155 58; /* #929b3a olive */
+  --series-6: 213 81 129; /* #d55181 magenta */
+
+  /*
+   * Ramps: the 3D view's height palettes, low to high, nine stops each, read by its WebGL
+   * renderer (core/cloud/palette.ts), never for UI. Sequential: lightness rises monotonically
+   * along each (OKLCH), so a height reads the same in colour and in grey. Matplotlib's viridis,
+   * cividis (made for colour vision deficiency) and magma, each trimmed at its dark end so the
+   * lowest heights still clear 2:1 against surface (viridis from 0.195, cividis from 0.215, magma
+   * from 0.345). Not Tailwind colours: a ramp is a list, not one colour.
+   */
+  --ramp-viridis-1: 64 65 133; /* #404185 */
+  --ramp-viridis-2: 53 93 140; /* #355d8c */
+  --ramp-viridis-3: 43 119 142; /* #2b778e */
+  --ramp-viridis-4: 35 143 140; /* #238f8c */
+  --ramp-viridis-5: 39 167 131; /* #27a783 */
+  --ramp-viridis-6: 69 190 112; /* #45be70 */
+  --ramp-viridis-7: 123 209 80; /* #7bd150 */
+  --ramp-viridis-8: 188 223 42; /* #bcdf2a */
+  --ramp-viridis-9: 253 231 37; /* #fde725 */
+  --ramp-cividis-1: 56 72 108; /* #38486c */
+  --ramp-cividis-2: 82 89 109; /* #52596d */
+  --ramp-cividis-3: 105 107 113; /* #696b71 */
+  --ramp-cividis-4: 127 125 118; /* #7f7d76 */
+  --ramp-cividis-5: 151 144 118; /* #979076 */
+  --ramp-cividis-6: 176 164 112; /* #b0a470 */
+  --ramp-cividis-7: 202 185 100; /* #cab964 */
+  --ramp-cividis-8: 228 207 82; /* #e4cf52 */
+  --ramp-cividis-9: 254 232 56; /* #fee838 */
+  --ramp-magma-1: 118 33 128; /* #762180 */
+  --ramp-magma-2: 152 45 127; /* #982d7f */
+  --ramp-magma-3: 186 57 120; /* #ba3978 */
+  --ramp-magma-4: 218 71 106; /* #da476a */
+  --ramp-magma-5: 240 101 95; /* #f0655f */
+  --ramp-magma-6: 251 138 101; /* #fb8a65 */
+  --ramp-magma-7: 254 176 122; /* #feb07a */
+  --ramp-magma-8: 254 215 154; /* #fed79a */
+  --ramp-magma-9: 252 253 191; /* #fcfdbf */
+}
+
+/*
+ * Light themes (data-theme on <html>, set by ThemeService). Technical light keeps the instrument
+ * look on cool greys; Light uses warm paper tones and a softer style (sans captions, normal case,
+ * a larger radius). Text contrast on surface: fg ≥ 15, muted ≥ 6.4, faint ≥ 3.3, accent and
+ * states ≥ 4.8; white on the accent 5.9.
+ */
+[data-theme='technical-light'],
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Same series, darkened (CAM02 lightness, hue kept) to clear 3:1 on the light bg; adjacent CVD ΔE ≥ 13. */
+  --series-1: 53 132 226; /* #3584e2 blue */
+  --series-2: 185 114 39; /* #b97227 ochre */
+  --series-3: 0 144 159; /* #00909f teal */
+  --series-4: 129 118 217; /* #8176d9 violet */
+  --series-5: 128 136 41; /* #808829 olive */
+  --series-6: 213 81 129; /* #d55181 magenta */
+
+  /*
+   * Ramps on a light surface: the same maps from their dark end, trimmed at the bright end so the
+   * highest stop still clears 2:1 against surface (viridis to 0.749, cividis to 0.777, magma to
+   * 0.785). Lightness still rises monotonically; low heights now stand out, high ones recede.
+   */
+  --ramp-viridis-1: 68 1 84; /* #440154 */
+  --ramp-viridis-2: 72 33 115; /* #482173 */
+  --ramp-viridis-3: 66 63 133; /* #423f85 */
+  --ramp-viridis-4: 55 90 140; /* #375a8c */
+  --ramp-viridis-5: 44 113 142; /* #2c718e */
+  --ramp-viridis-6: 35 136 142; /* #23888e */
+  --ramp-viridis-7: 31 159 136; /* #1f9f88 */
+  --ramp-viridis-8: 49 181 123; /* #31b57b */
+  --ramp-viridis-9: 92 200 99; /* #5cc863 */
+  --ramp-cividis-1: 0 34 78; /* #00224e */
+  --ramp-cividis-2: 5 51 113; /* #053371 */
+  --ramp-cividis-3: 51 68 109; /* #33446d */
+  --ramp-cividis-4: 77 85 108; /* #4d556c */
+  --ramp-cividis-5: 100 103 112; /* #646770 */
+  --ramp-cividis-6: 121 121 119; /* #797977 */
+  --ramp-cividis-7: 145 139 120; /* #918b78 */
+  --ramp-cividis-8: 169 159 115; /* #a99f73 */
+  --ramp-cividis-9: 194 179 105; /* #c2b369 */
+  --ramp-magma-1: 0 0 4; /* #000004 */
+  --ramp-magma-2: 20 14 54; /* #140e36 */
+  --ramp-magma-3: 57 15 110; /* #390f6e */
+  --ramp-magma-4: 98 25 128; /* #621980 */
+  --ramp-magma-5: 137 40 129; /* #892881 */
+  --ramp-magma-6: 178 53 123; /* #b2357b */
+  --ramp-magma-7: 217 70 107; /* #d9466b */
+  --ramp-magma-8: 244 105 92; /* #f4695c */
+  --ramp-magma-9: 253 152 105; /* #fd9869 */
+}
+
+[data-theme='technical-light'] {
+  --bg: 236 239 242; /* #eceff2 */
+  --surface: 248 249 250; /* #f8f9fa */
+  --raised: 228 232 235; /* #e4e8eb */
+  --line: 214 219 224; /* #d6dbe0 */
+  --line-strong: 188 195 202; /* #bcc3ca */
+
+  --fg: 20 24 28; /* #14181c */
+  --muted: 84 92 100; /* #545c64 */
+  --faint: 128 135 143; /* #80878f */
+
+  --accent: 196 31 46; /* #c41f2e */
+  --ok: 26 127 55; /* #1a7f37 */
+  --warn: 148 99 0; /* #946300 */
+  --err: 207 42 36; /* #cf2a24 */
+}
+
+[data-theme='light'] {
+  --radius: 6px;
+  --chrome-font: 'IBM Plex Sans', system-ui, sans-serif;
+  --chrome-case: none;
+  --chrome-tracking: 0.02em;
+  --chrome-tracking-tight: 0.01em;
+
+  --bg: 244 242 237; /* #f4f2ed */
+  --surface: 252 251 248; /* #fcfbf8 */
+  --raised: 235 232 225; /* #ebe8e1 */
+  --line: 224 220 211; /* #e0dcd3 */
+  --line-strong: 203 197 185; /* #cbc5b9 */
+
+  --fg: 34 32 28; /* #22201c */
+  --muted: 97 92 83; /* #615c53 */
+  --faint: 143 137 126; /* #8f897e */
+
+  --accent: 194 35 51; /* #c22333 */
+  --ok: 42 122 59; /* #2a7a3b */
+  --warn: 143 97 6; /* #8f6106 */
+  --err: 200 50 42; /* #c8322a */
+}
+
+/*
+ * The Light theme's softer type also reaches captions written inline as `font-mono uppercase`
+ * (nav, tabs, overlays): mono + uppercase is always chrome, never a value.
+ */
+[data-theme='light'] .font-mono.uppercase {
+  font-family: var(--chrome-font);
+  text-transform: var(--chrome-case);
+  letter-spacing: var(--chrome-tracking-tight);
+}
